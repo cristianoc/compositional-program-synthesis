@@ -10,8 +10,8 @@ We use **ARC‑AGI** tasks as the primary sandbox.
 ---
 
 ## TL;DR (approach)
-1. **Start with grids** \(domain **G**\).
-2. **Lift** to a simpler **abstract domain A** with an **embedding** \(\(e: A \to G\)\) and a **mapping** from concrete examples to A.
+1. **Start with grids** (domain **G**).
+2. **Lift** to a simpler **abstract domain A** with an **embedding** $(e: A \to G)$ and a **mapping** from concrete examples to A.
 3. **Solve** the abstract problem in A; then **embed** the solution back to G.
 4. **Refine recursively**: A → A₂ → …, building a **tree of abstraction refinements**.
 5. **Score evidence** that an abstraction is correct from example consistency; **branch** and **vote**/select across plausible refinements to hedge against wrong abstractions.
@@ -22,16 +22,16 @@ This promises exponential shrinkage of the effective search space under repeated
 
 ## Background and baseline
 - **Task**: Given a few input/output grid pairs and a test input, produce the test output.
-- **Non‑compositional baseline**: Search a function \(f: G \to G\) within a program/hypothesis space so that \(f(x_i) = y_i\) (up to a task‑specific notion of agreement), then apply \(f(x_\text{test})\).
+- **Non‑compositional baseline**: Search a function $f: G \to G$ within a program/hypothesis space so that $f(x_i) = y_i$ (up to a task‑specific notion of agreement), then apply $f(x_\text{test})$.
 - We treat this as **program search** (e.g., enumerative DSL, constraint solving, LLM‑guided search, or neural policies producing edits/sequences).
 
 ---
 
 ## Formalization
 - **G**: concrete domain of grids (finite palettes, shapes, positions).
-- **A**: abstract domain with **embedding** \(e: A \to G\).
-- **Mapping** of examples: for each training pair \((x, y)\) and test input \(x^\*\), find **abstract examples** \((\hat{x}, \hat{y})\) and **\(\hat{x}^\*\)** s.t. \(e(\hat{x}) \approx x\), \(e(\hat{y}) \approx y\). ("≈" denotes the task’s agreement relation.)
-- **Abstract solver**: find \(f_A: A \to A\) with \(f_A(\hat{x}) = \hat{y}\), then predict \(\hat{y}^\* = f_A(\hat{x}^\*)\), and output \(e(\hat{y}^\*)\).
+- **A**: abstract domain with **embedding** $e: A \to G$.
+- **Mapping** of examples: for each training pair $(x, y)$ and test input $x^*$, find **abstract examples** $(\hat{x}, \hat{y})$ and $\hat{x}^*$ s.t. $e(\hat{x}) \approx x$, $e(\hat{y}) \approx y$. ("≈" denotes the task's agreement relation.)
+- **Abstract solver**: find $f_A: A \to A$ with $f_A(\hat{x}) = \hat{y}$, then predict $\hat{y}^* = f_A(\hat{x}^*)$, and output $e(\hat{y}^*)$.
 
 **Existence of a consistent mapping** (and its simplicity) is **evidence** that the abstraction is probably correct for the task.
 
@@ -48,8 +48,8 @@ We **intentionally do not specify how abstractions are obtained**. This README d
 
 ## Examples of abstractions (A) and embeddings (e)
 *Illustrative only.* These examples communicate the **interface** (A, e, mappings) and are **not** a prescribed library.
-- **Palette reduction**: a color never appears → A is G without that color; \(e\) is identity on remaining colors.
-- **Object graph**: A contains connected components and relations (adjacency, symmetry); \(e\) renders objects to pixels.
+- **Palette reduction**: a color never appears → A is G without that color; $e$ is identity on remaining colors.
+- **Object graph**: A contains connected components and relations (adjacency, symmetry); $e$ renders objects to pixels.
 - **Downsampling / tiling**: A compresses blocks (e.g., 2×2 to 1×1) with an invertible render back to G.
 - **Symmetry quotienting**: A factors out rotations/reflections; e re‑applies a chosen canonical pose.
 - **Masking irrelevant regions**: A excludes proven‑irrelevant cells; e fills them via a carry‑over rule.
@@ -69,11 +69,11 @@ Node = {
   score: evidence that (A, e, m) is valid for this task,
 }
 ```
-Edges represent **further abstraction** (A → A₂) or **refinement choices** (e.g., which symmetry, which palette subset). We conduct **bounded best‑first / beam search** over this tree. Leaves produce candidate predictions in G via \(e\).
+Edges represent **further abstraction** (A → A₂) or **refinement choices** (e.g., which symmetry, which palette subset). We conduct **bounded best‑first / beam search** over this tree. Leaves produce candidate predictions in G via $e$.
 
 ### Evidence and scoring
-- **Training consistency**: how perfectly the abstract hypothesis explains \((x_i,y_i)\) after embedding.
-- **Compression/MDL**: shorter descriptions of A, e, and \(f_A\) score higher.
+- **Training consistency**: how perfectly the abstract hypothesis explains $(x_i,y_i)$ after embedding.
+- **Compression/MDL**: shorter descriptions of A, e, and $f_A$ score higher.
 - **Stability checks**: invariants (counts, symmetries) preserved across examples.
 - **Robustness**: small perturbations to examples don’t break mapping.
 - **Prior**: prefer low‑capacity abstractions first.
@@ -133,7 +133,7 @@ This project touches several neighboring lines of work; we aim to interoperate w
 ---
 
 ## Guarantees and limits
-- **Exponential shrinkage intuition**: if each correct abstraction reduces branching by factor \(r<1\), depth \(d\) yields \(r^d\) effective search.
+- **Exponential shrinkage intuition**: if each correct abstraction reduces branching by factor $r<1$, depth $d$ yields $r^d$ effective search.
 - **Failure mode**: a **wrong abstraction** (e.g., assuming a color absent that appears in the test output) can trap a single path. Hence **branching**, **voting**, and **fallback** are essential.
 
 ---
