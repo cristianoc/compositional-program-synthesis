@@ -22,7 +22,7 @@ This promises exponential shrinkage of the effective search space under repeated
 
 ## Background and baseline
 - **Task**: Given a few input/output grid pairs and a test input, produce the test output.
-- **Non‑compositional baseline**: Search a function $f: G \to G$ within a program/hypothesis space so that $f(x_i) = y_i$ (up to a task‑specific notion of agreement), then apply $f(x_\text{test})$.
+- **Non‑compositional baseline**: Search a function $f: G \to G$ within a program/hypothesis space so that $f(x_i) = y_i$ (up to a task‑specific notion of agreement), then apply $f(x_{test})$.
 - We treat this as **program search** (e.g., enumerative DSL, constraint solving, LLM‑guided search, or neural policies producing edits/sequences).
 
 ---
@@ -30,8 +30,8 @@ This promises exponential shrinkage of the effective search space under repeated
 ## Formalization
 - **G**: concrete domain of grids (finite palettes, shapes, positions).
 - **A**: abstract domain with **embedding** $e: A \to G$.
-- **Mapping** of examples: for each training pair $(x, y)$ and test input $x^*$, find **abstract examples** $(\hat{x}, \hat{y})$ and $\hat{x}^*$ s.t. $e(\hat{x}) \approx x$, $e(\hat{y}) \approx y$. ("≈" denotes the task's agreement relation.)
-- **Abstract solver**: find $f_A: A \to A$ with $f_A(\hat{x}) = \hat{y}$, then predict $\hat{y}^* = f_A(\hat{x}^*)$, and output $e(\hat{y}^*)$.
+- **Mapping** of examples: for each training pair $(x, y)$ and test input $x_{test}$, find **abstract examples** $(x_A, y_A)$ and $x_{A,test}$ s.t. $e(x_A) \approx x$, $e(y_A) \approx y$. ("≈" denotes the task's agreement relation.)
+- **Abstract solver**: find $f_A: A \to A$ with $f_A(x_A) = y_A$ then predict $y_{A,test} = f_A(x_{A,test})$, and output $e(y_{A,test})$.
 
 **Existence of a consistent mapping** (and its simplicity) is **evidence** that the abstraction is probably correct for the task.
 
