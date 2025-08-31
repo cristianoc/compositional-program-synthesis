@@ -197,6 +197,20 @@ Geometric-mean speedups (Global / Compositional+) across the grid:
 Hardest slice ($L_X=8$, $b_X=4$):
 Global nodes $1609 \to 32061$ as $K:0\to3$; Compositional+ stays near $372$--$387$.
 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{nodes_vs_k_scaling.png}
+\caption{Node exploration scaling: Global search (exponential growth) vs. Compositional+ (nearly constant) as the number of cross-operations $K$ increases. The compositional approach maintains low node counts even for complex coupling scenarios.}
+\label{fig:nodes_scaling}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.7\textwidth]{speedup_vs_k.png}
+\caption{Speedup analysis: Performance improvement of Compositional+ over Global BFS across different parameter configurations. Speedups increase dramatically with coupling complexity, reaching 180× faster for $K=3$.}
+\label{fig:speedup}
+\end{figure}
+
 \vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
 
 \section{Conclusion}
