@@ -1,15 +1,15 @@
-## Compositional Reasoning via Abstraction–Refinement (ARC-AGI)
+## Compositional Reasoning via Abstraction–Refinement for Program Synthesis
 
-> Initial design document / README for a new research repo.
+> A framework for program synthesis from examples using compositional abstractions and refinement.
 
 ### Why
-Current test-time reasoning often attacks the whole task at once, searching a huge state space whose cost grows (often exponentially) with problem complexity. This project explores **compositional reasoning**: repeatedly solve a **simpler abstraction** of the task, then **refine** back to the concrete grid world.  
-Primary sandbox: **ARC-AGI** tasks.
+Program synthesis from examples often attacks the whole task at once, searching a huge space of possible programs whose cost grows (often exponentially) with problem complexity. This project explores **compositional reasoning**: repeatedly solve a **simpler abstraction** of the task, then **refine** back to the concrete problem domain.  
+Primary application domains: **grid-based puzzles** (including ARC-AGI) and **structured synthesis tasks**.
 
 ---
 
 ### TL;DR (approach)
-1. Start from grids (concrete domain **G**).  
+1. Start from a concrete problem domain **G** (e.g., grids, programs, structured data).  
 2. Lift to an abstract domain **A** with an embedding `e: A → G` and a mapping of examples from **G** to **A**.  
 3. Solve the problem in **A**; map the solution back to **G** via `e`.  
 4. Refine recursively `A → A₂ → …`, forming a tree of abstraction refinements.  
@@ -20,8 +20,8 @@ Primary sandbox: **ARC-AGI** tasks.
 ---
 
 ### Background & baseline
-- **Task:** given a few input/output grid pairs and a test input, produce the test output.  
-- **Non-compositional baseline:** search for a function `f: G → G` (via enumerative DSL, constraints, LLM-guided search, or neural edit policies) such that `f(x_i) = y_i` (under the task's agreement relation), then apply `f(x_test)`.
+- **Task:** given a few input/output example pairs `(x_i, y_i)` and a test input `x_test`, synthesize a program that produces the test output `y_test`.  
+- **Non-compositional baseline:** search for a function `f: G → G` (via enumerative DSL, constraints, LLM-guided search, or neural edit policies) such that `f(x_i) = y_i` for all training examples, then apply `f(x_test)`.
 
 ---
 
@@ -92,7 +92,7 @@ Edges represent further abstraction `A → A₂` or refinement choices (e.g., sy
 ### Algorithms (sketch)
 #### Orchestrator pseudocode
 ```python
-def solve_arc(task):
+def solve_task(task):
     frontier = init_frontier_with_baseline(task)
     while budget_not_exceeded():
         node = pop_best(frontier)
@@ -119,13 +119,13 @@ This document deliberately leaves the proposal mechanism unspecified. In the env
 ### Context & related work
 This project touches several neighboring lines of work; we aim to interoperate with (not replace) them. Importantly, we avoid committing to a fixed abstraction library and instead emphasize instance-wise, test-time adaptation—aligning with trends in test-time compute and structured search.
 
-#### ARC-AGI benchmark and community
-- ARC frames reasoning as generalization from few examples under human-centric priors. Our setup follows ARC's spirit (program search + abstraction) and is compatible with ARC-AGI-1/2 harnesses and emerging agentic variants.  
-- Community reports emphasize program synthesis and neurosymbolic hybrids; the abstraction–refinement layer is designed to sit above whichever concrete solver you use.
+#### Program synthesis benchmarks and community
+- Many domains frame reasoning as generalization from few examples under domain-specific priors. Our setup follows this spirit (program search + abstraction) and is compatible with various synthesis harnesses.  
+- The abstraction–refinement layer is designed to sit above whichever concrete solver you use, making it applicable across different synthesis domains.
 
 #### Abstraction–refinement & formal methods
 - Inspired by **CEGAR** in model checking: maintain a small abstract model and refine when evidence demands it.  
-- Difference here: ARC lacks ground-truth counterexamples at test time, so we replace counterexamples with **evidence scores** and hedge via branching + voting.
+- Difference here: program synthesis from examples lacks ground-truth counterexamples at test time, so we replace counterexamples with **evidence scores** and hedge via branching + voting.
 
 #### Program synthesis & library learning
 - Enumerative/constraint-based synthesis and DSL design remain strong baselines; in this framing they operate **within `A`** once an abstraction is posited.  
@@ -207,15 +207,20 @@ Both implementations provide concrete evidence that the abstraction-refinement f
 ---
 
 ### Examples (intuition only)
+**Grid-based domains:**
 - Missing color: detect unused color → drop it in `A` → solve in smaller palette → embed back (identity on remaining colors).  
 - Object duplication with symmetry: factor out rotation in `A`, reason over object graphs, then render with chosen pose.  
 - Blockwise scaling: downsample to detect macro-pattern, synthesize macro logic, upsample back.
+
+**Other synthesis domains:**
+- String manipulation: factor out character-level operations → reason over token/word abstractions → expand back to characters.
+- List processing: abstract over specific data types → synthesize shape-preserving operations → instantiate with concrete types.
 
 ---
 
 ### Open questions
 - How best to discover abstractions `(m)` robustly from 1–5 examples?  
-- What priors on abstraction families work across ARC tasks?  
+- What priors on abstraction families work across different synthesis domains?  
 - How to quantify evidence: MDL vs. Bayesian model evidence vs. discriminative scoring?  
 - How to combine LLM-proposed abstractions with verifiable checks?
 
