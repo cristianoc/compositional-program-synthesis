@@ -202,12 +202,3 @@ Both implementations provide concrete evidence that the abstraction-refinement f
 **Other synthesis domains:**
 - String manipulation: factor out character-level operations → reason over token/word abstractions → expand back to characters.
 - List processing: abstract over specific data types → synthesize shape-preserving operations → instantiate with concrete types.
-
----
-
-### Open questions
-- How best to discover abstractions `(m)` robustly from 1–5 examples?  
-- What priors on abstraction families work across different synthesis domains?  
-- How to quantify evidence: MDL vs. Bayesian model evidence vs. discriminative scoring?  
-- How to combine LLM-proposed abstractions with verifiable checks?
-
