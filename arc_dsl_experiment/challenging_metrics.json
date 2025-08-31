@@ -1,9 +1,9 @@
 {
   "G": {
     "total_candidates": 2404,
-    "num_valid": 444,
-    "avg_tries_to_success": 5.376666666666667,
-    "wall_time_s": 3.854557991027832,
+    "num_valid": 442,
+    "avg_tries_to_success": 5.3933333333333335,
+    "wall_time_s": 3.872457981109619,
     "sample_valid": [
       [
         "identity",
@@ -24,11 +24,6 @@
         "perm_4",
         "argmin_hist",
         "smallest_canonical"
-      ],
-      [
-        "perm_5",
-        "argmin_hist",
-        "smallest_unstable"
       ],
       [
         "perm_5",
@@ -54,6 +49,11 @@
         "perm_9",
         "argmin_hist",
         "smallest_canonical"
+      ],
+      [
+        "perm_10",
+        "argmin_hist",
+        "smallest_canonical"
       ]
     ]
   },
@@ -61,7 +61,7 @@
     "total_candidates": 172,
     "num_valid": 4,
     "avg_tries_to_success": 35.57333333333333,
-    "wall_time_s": 0.1913621425628662,
+    "wall_time_s": 0.196699857711792,
     "sample_valid": [
       [
         "max_id",
@@ -85,7 +85,7 @@
     "total_candidates": 2,
     "num_valid": 2,
     "avg_tries_to_success": 1.0,
-    "wall_time_s": 0.027738094329833984,
+    "wall_time_s": 0.02817082405090332,
     "sample_valid": [
       [
         "max_id",
