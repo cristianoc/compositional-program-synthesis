@@ -28,7 +28,7 @@ Primary application domains: **grid-based puzzles** (including ARC-AGI) and **st
 ### Formalization (notation)
 | Symbol | Meaning |
 |---|---|
-| **G** | Concrete grid domain (finite palettes, shapes, positions). |
+| **G** | Concrete problem domain (e.g., grids, strings, programs, structured data). |
 | **A** | Abstract domain. |
 | `e: A → G` | Embedding (renderer) from abstract to concrete. |
 | Mapping | For each training pair `(x, y)` and test input `x*`, find `(x̂, ŷ)` and `x̂*` in **A** such that `e(x̂) ≈ x` and `e(ŷ) ≈ y` (≈ = task agreement). |
@@ -50,13 +50,18 @@ How to **obtain** abstractions is intentionally left open. This README defines t
 ### Examples of abstractions `A` and embeddings `e`  *(illustrative only)*
 These illustrate the interface `(A, e, mappings)`; they are **not** a prescribed library.
 
+**Grid-based domains:**
 - **Palette reduction:** a color never appears → `A` is `G` without that color; `e` is identity on remaining colors.  
 - **Object graph:** `A` contains connected components and relations (adjacency, symmetry); `e` renders objects to pixels.  
 - **Downsampling / tiling:** `A` compresses blocks (e.g., 2×2→1×1) with an invertible render back to `G`.  
 - **Symmetry quotienting:** factor out rotations/reflections; `e` re-applies a canonical pose.  
-- **Masking irrelevant regions:** `A` excludes proven-irrelevant cells; `e` fills them via a carry-over rule.
 
-Abstractions can be **parametric** (which color, which symmetry, etc.) and **composed**.
+**Other domains:**
+- **Type abstraction:** ignore specific data types → `A` works with shape/structure; `e` instantiates with concrete types.
+- **Syntax simplification:** abstract away syntactic sugar → `A` uses core constructs; `e` expands to full syntax.
+- **Scale abstraction:** ignore specific numeric values → `A` works with relative relationships; `e` applies concrete scaling.
+
+Abstractions can be **parametric** (which element, which transformation, etc.) and **composed**.
 
 ---
 
@@ -138,25 +143,7 @@ This project touches several neighboring lines of work; we aim to interoperate w
 
 ### Guarantees & limits
 - **Shrinkage intuition:** if each correct abstraction reduces branching by factor `r < 1`, depth `d` yields `r^d` effective search.  
-- **Failure mode:** a wrong abstraction (e.g., assuming a color is absent that appears in the test output) can trap a single path—hence **branching, voting, and fallback** are essential.
-
----
-
-### Implementation plan
-**Phase 0 – Baseline**  
-- Provide a simple ARC program-search baseline in **G** for comparison.
-
-**Phase 1 – Interfaces & scaffolding**  
-- Define types for `Grid (G)`, `AbstractDomain (A)`, `Embedding (e)`, `Mapping (m)`, `AbstractSolver`, `Node`, and scoring hooks. No commitment to any particular abstraction acquisition strategy.
-
-**Phase 2 – Orchestrator skeleton**  
-- Implement beam/best-first search over abstraction hypotheses. Provide a pluggable `propose(node)` hook (enumerative, LLM-guided, learned, etc.).
-
-**Phase 3 – Evaluation harness**  
-- Metrics: success rate, compute budget, nodes expanded, abstraction depth, solves unique to compositional mode. Ablations: with/without branching, voting, fallback.
-
-**(Optional) Phase X – Demo probes**  
-- Small, non-authoritative example proposers for experimentation, kept separate from the core.
+- **Failure mode:** a wrong abstraction (e.g., assuming an element is absent that appears in the test output) can trap a single path—hence **branching, voting, and fallback** are essential.
 
 ---
 
