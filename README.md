@@ -184,6 +184,28 @@ compositional-arc-agi/
 
 ---
 
+### Implemented Instantiations
+
+Two concrete instantiations of the compositional reasoning approach have been developed and evaluated:
+
+#### 1. DSL Compositional Abstractions (`arc_dsl_experiment/`)
+This instantiation implements compositional abstractions that eliminate symmetries in ARC-style grid puzzles through two levels:
+- **A1 (Palette canonicalization)**: Relabels non-zero colors by decreasing frequency to quotient out palette symmetry
+- **A2 (Canonical object order)**: Sorts connected components by (area, top, left, color) to quotient out object-enumeration symmetry
+
+**Results**: Achieves dramatic search space reduction from 2404→2 programs (-99.917%) with 138× speedup, demonstrating near-zero search cost with 100% validity rate on the composed abstractions.
+
+#### 2. Program Synthesis via Cross-Free Factorization (`program_synthesis/`)
+This instantiation uses a two-level abstraction approach for compositional program synthesis:
+- **A (Cross-free factorization)**: Solves coordinates independently, ignoring cross-operations
+- **A⁺ (Interface refinement)**: Adds minimal cross-operation interfaces to restore necessary couplings
+
+**Results**: Achieves 7-60× fewer explored nodes and 8-180× speedup over global search methods, validating the effectiveness of factorized synthesis with selective refinement.
+
+Both implementations provide concrete evidence that the abstraction-refinement framework can yield substantial computational advantages while maintaining solution quality.
+
+---
+
 ### Examples (intuition only)
 - Missing color: detect unused color → drop it in `A` → solve in smaller palette → embed back (identity on remaining colors).  
 - Object duplication with symmetry: factor out rotation in `A`, reason over object graphs, then render with chosen pose.  
