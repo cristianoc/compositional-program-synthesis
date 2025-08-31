@@ -2,10 +2,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from typing import List, Tuple, Dict, Any, Callable
+from typing import List, Tuple, Dict
 import numpy as np, random, time, json
-
-def deep_copy_grid(g): return np.array(g, dtype=int, copy=True)
 
 def segment_components(g):
     H, W = g.shape
@@ -34,18 +32,20 @@ def color_hist_nonzero(g):
     u,c = np.unique(vals, return_counts=True)
     return {int(ui): int(ci) for ui,ci in zip(u,c)}
 
+def canonical_component_key(comp):
+    return (comp["area"], comp["bbox"][0], comp["bbox"][1], comp["color"])
+
 def alpha1_palette(g):
-    x = deep_copy_grid(g)
-    hist = color_hist_nonzero(x)
+    hist = color_hist_nonzero(g)
     order = sorted(hist.items(), key=lambda kv: (-kv[1], kv[0]))
     can_for_orig = {}; orig_for_can = {}
     k=1
     for orig,_ in order:
         can_for_orig[orig]=k; orig_for_can[k]=orig; k+=1
-    x_hat = np.zeros_like(x)
-    for r in range(x.shape[0]):
-        for c in range(x.shape[1]):
-            v = int(x[r,c])
+    x_hat = np.zeros_like(g)
+    for r in range(g.shape[0]):
+        for c in range(g.shape[1]):
+            v = int(g[r,c])
             x_hat[r,c] = 0 if v==0 else can_for_orig[v]
     return x_hat, {"orig_for_can": orig_for_can, "can_for_orig": can_for_orig}
 
@@ -59,13 +59,13 @@ def remap_with_can_for_orig(g, can_for_orig: Dict[int,int]):
 
 def alpha2_objorder(x_hat):
     comps = segment_components(x_hat)
-    comps_sorted = sorted(comps, key=lambda comp: (comp["area"], comp["bbox"][0], comp["bbox"][1], comp["color"]))
-    return x_hat.copy(), {"order": comps_sorted}
+    comps_sorted = sorted(comps, key=canonical_component_key)
+    return x_hat, {"order": comps_sorted}
 
 def ground_truth_transform(x):
     comps = segment_components(x)
     if not comps: return x.copy()
-    s = sorted(comps, key=lambda comp: (comp["area"], comp["bbox"][0], comp["bbox"][1], comp["color"]))[0]
+    s = sorted(comps, key=canonical_component_key)[0]
     hist = color_hist_nonzero(x); m=min(hist.values()); cand=[c for c,h in hist.items() if h==m]
     target = max(cand)
     y = x.copy()
@@ -158,7 +158,7 @@ COLOR_RULES = [("max_id", sel_color_max_id), ("argmin_hist", sel_color_argmin_hi
 def sel_comp_smallest_canonical(x_hat):
     comps=segment_components(x_hat)
     if not comps: return None
-    return sorted(comps, key=lambda c:(c["area"], c["bbox"][0], c["bbox"][1], c["color"]))[0]
+    return sorted(comps, key=canonical_component_key)[0]
 
 def sel_comp_smallest_unstable(x_hat):
     comps=segment_components(x_hat)

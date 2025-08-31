@@ -23,7 +23,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from typing import Callable, List, Tuple, Dict
-import itertools
+
 import math
 import pandas as pd
 import matplotlib.pyplot as plt
