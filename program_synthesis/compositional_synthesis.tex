@@ -223,4 +223,102 @@ Distinguishing two abstraction layers crystallizes the method:
 
 On coupled tasks, $A\to A^{+}$ achieves the same solutions as global search at a fraction of the cost, validating the core thesis: solve in a simpler world, then refine only what must be coupled.
 
+
+\section{End-to-End Example: Solve in $A$, Refine to $A^{+}$, Embed to $G$}
+
+This section gives a concrete, self-contained walkthrough that makes precise what it means to
+\emph{solve in $A$}, then \emph{refine to $A^{+}$}, and finally \emph{embed to $G$}.
+
+\subsection{Example setup (DSL and hidden target)}
+\paragraph{Primitives.} We work on states $(x,y)\in\mathbb{Z}\times\mathbb{Z}$ with the following primitives:
+\begin{itemize}
+\item \textbf{X-only:} \texttt{inc\_x}: $(x,y)\mapsto(x+1,y)$;\quad \texttt{double\_x}: $(x,y)\mapsto(2x,y)$.
+\item \textbf{Y-only:} \texttt{inc\_y}: $(x,y)\mapsto(x,y+1)$.
+\item \textbf{Cross (triangular):} $\kappa$: $(x,y)\mapsto(x,\,y+x)$.
+\end{itemize}
+
+\noindent\textbf{Hidden target structure.}
+Let the X-part length be $L_X=4$, the Y-part length $L_Y=2$, and the number of cross ops $K=1$.
+Choose
+\begin{align*}
+p_X^\star &= [\texttt{inc\_x},\ \texttt{inc\_x},\ \texttt{double\_x},\ \texttt{inc\_x}],\\
+p_Y^\star &= [\texttt{inc\_y},\ \texttt{inc\_y}],\\
+\alpha^\star &= 2 \quad\text{(insert $\kappa$ after the first two X-ops).}
+\end{align*}
+The resulting function is
+\begin{equation*}
+x' \;=\; 2x+5,\qquad y' \;=\; y + x + 4.
+\end{equation*}
+
+\paragraph{Training set $D$.} Generated from the target:
+\begin{center}
+\begin{tabular}{c|cc}
+input $(x,y)$ & $x'=2x+5$ & $y'=y+x+4$\\\hline
+$(-1,0)$ & $3$ & $3$\\
+$(0,1)$ & $5$ & $5$\\
+$(3,-2)$ & $11$ & $5$\\
+\end{tabular}
+\end{center}
+
+\subsection{Level 1: Solve in $A$ (no couplings)}
+The abstraction $A=\Sigma_X^*\times\Sigma_Y^*$ removes cross-ops and treats coordinates independently.
+\paragraph{Solve the X-projection.}
+From $D$, the X-projection is $\{-1\!\mapsto\!3,\,0\!\mapsto\!5,\,3\!\mapsto\!11\}$, which fits $x'=2x+5$.
+In our DSL, a minimal $p_X$ that realizes this is
+\begin{equation*}
+p_X^\star=[\texttt{inc\_x},\ \texttt{inc\_x},\ \texttt{double\_x},\ \texttt{inc\_x}].
+\end{equation*}
+\paragraph{Y in $A$.} The Y-projection alone cannot be matched by any Y-only program (it depends on $x$),
+so we defer Y to refinement (we keep $p_Y$ as two increments to be placed later).
+
+\subsection{Level 2: Refine to $A^{+}$ (add a finite interface)}
+$A^{+}$ augments $p_X$ with a finite \emph{interface}: the placement $\alpha$ of $K$ cross-ops among the $L_X\!+\!1$ slots.
+With $L_X=4$, the slots are $\{0,1,2,3,4\}$ and the value of $x$ available at each slot (i.e., what $\kappa$ would add to $y$) is:
+\begin{align*}
+\text{slot }0 &:~ x\\
+\text{slot }1 &:~ x+1\\
+\text{slot }2 &:~ x+2\\
+\text{slot }3 &:~ 2(x+2)=2x+4\\
+\text{slot }4 &:~ 2x+5.
+\end{align*}
+We choose $\alpha\in\{0,\dots,4\}$ and fix two Y-increments so that for all $(x,y)\in D$,
+\(
+y' = y + \text{slot\_value}(\alpha) + 2
+\)
+matches the observed $y'$. Testing shows $\alpha^\star=2$ satisfies all rows:
+\begin{equation*}
+y' \;=\; y + (x+2) + 2 \;=\; y + x + 4.
+\end{equation*}
+
+\subsection{Level 3: Embed to $G$ (concrete program)}
+Embedding $e^{+}(p_X^\star,\alpha^\star)$ instantiates a concrete word over the full DSL.
+Any interleaving that preserves the X order, places $\kappa$ at slot $2$, and includes the two $\texttt{inc\_y}$ is semantics-equivalent.
+A canonical choice is
+\begin{equation*}
+[\texttt{inc\_x},\ \texttt{inc\_x},\ \kappa,\ \texttt{double\_x},\ \texttt{inc\_x},\ \texttt{inc\_y},\ \texttt{inc\_y}].
+\end{equation*}
+It computes for all $(x,y)$:
+\(
+x'\!=\!2x+5,\ y'\!=\!y+x+4
+\),
+matching the ground truth.
+
+\subsection{One-sentence summaries}
+\begin{itemize}
+\item \textbf{Solve in $A$:} find the factor $p_X^\star$ that matches the X-projection; Y cannot be solved without couplings.
+\item \textbf{Refine to $A^{+}$:} choose the finite interface $\alpha^\star$ (cross placement) and the Y-only count to explain $y'$.
+\item \textbf{Embed to $G$:} realize any concrete interleaving consistent with $(p_X^\star,\alpha^\star,p_Y^\star)$; all such words are semantics-equivalent here.
+\end{itemize}
+
+\subsection{Size comparison on this example}
+With $m_X=2$, $m_Y=1$, $m_\times=1$, $(L_X,L_Y,K)=(4,2,1)$,
+\begin{align*}
+|A| &= m_X^{L_X}\,m_Y^{L_Y} \;=\; 2^4\cdot 1^2 \;=\; 16,\\
+|A^{+}| &= m_X^{L_X}\,m_Y^{L_Y}\,\binom{L_X+K}{K} \;=\; 16\cdot \binom{5}{1} \;=\; 80,\\
+|G_{\text{family}}| &= \binom{L_X+L_Y+K}{L_X,L_Y,K}\,m_X^{L_X}\,m_Y^{L_Y}\,m_\times^{K}
+= \binom{7}{4,2,1}\cdot 16 = 105\cdot 16 = 1680.
+\end{align*}
+Thus $A^{+}$ compresses the concrete family by a factor ${1680}/{80}=21=\binom{7}{2}$, the number of purely Y-interleavings
+that are semantically redundant under the commutation assumptions.
+
 \end{document}
