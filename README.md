@@ -39,10 +39,10 @@ Primary application domains: **grid-based puzzles** (including ARC-AGI) and **st
 ---
 
 ### Scope (what this document does **not** prescribe)
-How to **obtain** abstractions is intentionally left open. This README defines the problem, interfaces, and evaluation framing only. Possible mechanisms—enumeration from a fixed library, LLM-guided proposals, meta-learned proposers, etc.—are future work.
+How to **obtain** abstractions is intentionally left open. This README defines the problem, interfaces, and evaluation framing only. Possible mechanisms—enumeration from a fixed library, LLM-guided proposals, meta-learned proposers, etc.—can vary by domain and application.
 
 - A fixed library can bootstrap experiments but limits expressivity.  
-- The intended direction is **test-time discovery** of abstractions per puzzle, i.e., search over abstraction hypotheses with evidence-guided branching.  
+- The intended direction is **test-time discovery** of abstractions per task, i.e., search over abstraction hypotheses with evidence-guided branching.  
 - The orchestrator treats abstraction discovery itself as search.
 
 ---
@@ -149,11 +149,11 @@ This project touches several neighboring lines of work; we aim to interoperate w
 
 ### Repository layout (current)
 ```text
-compositional-arc-agi/
+compositional-program-synthesis/
   README.md                           # this file
   arc_dsl_experiment/
     dsl.py                           # domain-specific language implementation
-    challenging_metrics.json        # metrics data for challenging ARC tasks
+    challenging_metrics.json        # metrics data for challenging tasks
     challenging_metrics.txt         # human-readable metrics summary
     compositional_abstractions.tex  # LaTeX paper on compositional abstractions
     compositional_abstractions.pdf  # compiled paper
