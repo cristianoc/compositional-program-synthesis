@@ -31,8 +31,8 @@ Primary application domains: **grid-based puzzles** (including ARC-AGI) and **st
 | **G** | Concrete problem domain (e.g., grids, strings, programs, structured data). |
 | **A** | Abstract domain. |
 | `e: A → G` | Embedding (renderer) from abstract to concrete. |
-| Mapping | For each training pair `(x, y)` and test input `x*`, find `(x̂, ŷ)` and `x̂*` in **A** such that `e(x̂) ≈ x` and `e(ŷ) ≈ y` (≈ = task agreement). |
-| `f_A: A → A` | Abstract solver mapping `x̂` to `ŷ`; predict `ŷ* = f_A(x̂*)`, then output `e(ŷ*)`. |
+| Mapping | For each training pair `(x, y)` and test input `x_test`, find `(x̂, ŷ)` and `x̂_test` in **A** such that `e(x̂) ≈ x` and `e(ŷ) ≈ y` (≈ = task agreement). |
+| `f_A: A → A` | Abstract solver mapping `x̂` to `ŷ`; predict `ŷ_test = f_A(x̂_test)`, then output `e(ŷ_test)`. |
 
 *A simple, consistent mapping—and its simplicity—are used as evidence that the abstraction suits the task.*
 
@@ -71,7 +71,7 @@ Each node is a task hypothesis:
 ```text
 Node = {
   A: abstract domain,
-  e: embedding A→G,
+  e: embedding A → G,
   m: mapping of concrete examples/test into A,
   S_A: solver on A,
   score: evidence that (A, e, m) is valid for this task,
@@ -142,7 +142,7 @@ This project touches several neighboring lines of work; we aim to interoperate w
 ---
 
 ### Guarantees & limits
-- **Shrinkage intuition:** if each correct abstraction reduces branching by factor `r < 1`, depth `d` yields `r^d` effective search.  
+- **Shrinkage intuition:** if each correct abstraction reduces search space by factor `r < 1`, depth `d` yields `r^d` relative search cost.  
 - **Failure mode:** a wrong abstraction (e.g., assuming an element is absent that appears in the test output) can trap a single path—hence **branching, voting, and fallback** are essential.
 
 ---
