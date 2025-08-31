@@ -34,7 +34,7 @@ Inline picture of the abstraction ladder:
 $$\Sigma = \Sigma_X \;\cup\; \Sigma_Y \;\cup\; \Sigma_{\times},$$
 where $\Sigma_X$ edits only $x$, $\Sigma_Y$ edits only $y$, and $\Sigma_{\times}$ are cross-ops (e.g., `add_first_to_second`: $(x,y)\mapsto(x,\,y+x)$).
 A program is a word $p\in\Sigma^{*}$ with standard functional semantics $⟦p⟧:G\rightarrow G$.
-	•	Supervision: dataset $D=\{(s_i,t_i)\}\subseteq G\times G$. Goal: find $p$ with $\forall i,\ \llbracket p\rrbracket(s_i)=t_i$.
+	•	Supervision: dataset $D=\{(s_i,t_i)\}\subseteq G\times G$. Goal: find $p$ with $\forall i,\ ⟦p⟧(s_i)=t_i$.
 
 ⸻
 
@@ -50,13 +50,13 @@ An element $a=(p_X,p_Y)$ means "do $p_X$ on $x$ and $p_Y$ on $y$, with no cross-
 
 Because $\Sigma_X$ commutes with $\Sigma_Y$,
 $$e:A\to \Sigma^{*},\quad e(p_X,p_Y)=\text{any interleaving of }p_X,p_Y$$
-is well-defined up to semantic equivalence: all such interleavings produce the same $\llbracket e(p_X,p_Y)\rrbracket$ on $G$.
+is well-defined up to semantic equivalence: all such interleavings produce the same $⟦e(p_X,p_Y)⟧$ on $G$.
 
 3.3 Solve in A
 
 Project the dataset onto coordinates and synthesize independently:
-$$\forall i:\ \pi_X(\llbracket p_X\rrbracket(s_i))=\pi_X(t_i),\qquad
-\forall i:\ \pi_Y(\llbracket p_Y\rrbracket(s_i))=\pi_Y(t_i).$$
+$$\forall i:\ \pi_X(⟦p_X⟧(s_i))=\pi_X(t_i),\qquad
+\forall i:\ \pi_Y(⟦p_Y⟧(s_i))=\pi_Y(t_i).$$
 If both succeed, return $e(p_X,p_Y)$.
 
 Intuition. $A$ "turns off" the wires between coordinates, producing two small searches.
