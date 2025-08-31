@@ -160,52 +160,26 @@ This project touches several neighboring lines of work; we aim to interoperate w
 
 ---
 
-### Repository layout (proposed)
+### Repository layout (current)
 ```text
-compositional-arc/
-  README.md                # this file
-  data/
-    arc/                   # ARC tasks (train/dev)
-  core/
-    domains.py             # G, A, e, m interfaces & utilities
-    hypotheses/            # optional task-local hypotheses (empty by default)
-    solver/
-      baseline.py          # non-compositional baseline in G
-      abstract.py          # abstract-solver interfaces (placeholders)
-      constraints.py       # validators/invariants
-    orchestrator.py        # search over abstraction/refinement tree
-    scoring.py             # evidence/MDL/prior hooks
-  experiments/
-    eval.py                # harness & metrics
-    configs/               # beam sizes, budgets, ablations
-  docs/
-    figures/               # later: diagrams & examples
-  LICENSE
-```
-
----
-
-### Interfaces (typing sketch)
-```python
-class Grid: ...                      # concrete grid in G
-class AbstractDomain: ...            # parametrized domain A
-
-class Embedding:                     # e: A→G
-    def render(self, a: 'A') -> Grid: ...
-
-class Mapping:                       # m: G→A (for examples)
-    def lift(self, g: Grid) -> 'A': ...
-
-class AbstractSolver:                # solver S_A
-    def fit(self, pairs_A): ...
-    def predict(self, a_test): ...
-
-class Node:
-    A: AbstractDomain
-    e: Embedding
-    m: Mapping
-    solver: AbstractSolver
-    score: float
+compositional-arc-agi/
+  README.md                           # this file
+  arc_dsl_experiment/
+    dsl.py                           # domain-specific language implementation
+    challenging_metrics.json        # metrics data for challenging ARC tasks
+    challenging_metrics.txt         # human-readable metrics summary
+    compositional_abstractions.tex  # LaTeX paper on compositional abstractions
+    compositional_abstractions.pdf  # compiled paper
+    compositional_abstractions.{aux,log,out}  # LaTeX build artifacts
+    README.md                       # documentation for DSL experiments
+  program_synthesis/
+    scaling.py                      # scaling analysis and performance evaluation
+    compositional_synthesis.tex    # LaTeX paper on compositional synthesis
+    compositional_synthesis.pdf    # compiled paper
+    compositional_synthesis.{aux,log,out}  # LaTeX build artifacts
+    nodes_vs_k_scaling.png         # visualization: node count vs. parameter k
+    speedup_vs_k.png              # visualization: speedup analysis
+    README.md                     # documentation for synthesis experiments
 ```
 
 ---
@@ -223,15 +197,3 @@ class Node:
 - How to quantify evidence: MDL vs. Bayesian model evidence vs. discriminative scoring?  
 - How to combine LLM-proposed abstractions with verifiable checks?
 
----
-
-### Getting started *(placeholder)*
-```bash
-pip install -e .
-python experiments/eval.py --config configs/baseline.yaml
-python experiments/eval.py --config configs/comp.yaml
-```
-
----
-
-### Further reading & references *(selection)*
