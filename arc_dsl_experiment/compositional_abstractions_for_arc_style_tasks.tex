@@ -244,11 +244,21 @@ We evaluate a single ARC-style task family with three DSLs (G, A1, A1→A2). Met
 \section{Results}
 
 \textbf{Local-run results (your updated run):}
-\begin{lstlisting}
-[G]      total_candidates=2404  num_valid=441  avg_tries_to_success=5.405   wall_time_s=3.884
-[A1]     total_candidates=172   num_valid=4    avg_tries_to_success=35.573  wall_time_s=0.197
-[A1->A2] total_candidates=2     num_valid=2    avg_tries_to_success=1.000   wall_time_s=0.028
-\end{lstlisting}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Method} & \textbf{Total Candidates} & \textbf{Valid Programs} & \textbf{Avg Tries to Success} & \textbf{Wall Time (s)} \\
+\midrule
+G & 2404 & 441 & 5.405 & 3.884 \\
+A1 & 172 & 4 & 35.573 & 0.197 \\
+A1→A2 & 2 & 2 & 1.000 & 0.028 \\
+\bottomrule
+\end{tabular}
+\caption{Experimental results comparing three DSL approaches: raw enumeration (G), palette canonicalization (A1), and composed abstractions (A1→A2).}
+\label{tab:results}
+\end{table}
 
 These match the qualitative trend reported earlier (in a single-dataset summary) and sharpen the magnitude of the win from composing A1 with A2.
 
