@@ -14,16 +14,6 @@ Global program synthesis often explores a huge search space. If a task nearly fa
 
 We demonstrate this idea in a tiny DSL on integer pairs $(x,y)$. In separable tasks, solving each coordinate independently is optimal. In coupled tasks (e.g., $y$ must read the current $x$), a global solver works but is wasteful. Our Compositional+ solver first synthesizes the $x$-only program, then searches a small space of cross-op placements that wire $y$ to $x$ at just the right moments.
 
-Inline picture of the abstraction ladder:
-
-   Abstract, easy         Intermediate, small interface              Concrete programs
-┌──────────────────┐      ┌────────────────────────────────┐      ┌──────────────────────────┐
-│        A         │  →   │              A⁺                │  →   │            G             │
-│  (factors only)  │      │ (factor + K cross-op slots)    │      │ (all interleavings, ops) │
-└──────────────────┘ e    └────────────────────────────────┘ e⁺   └──────────────────────────┘
-         solve                         refine (enumerate α)                    execute
-
-
 ⸻
 
 2 Concrete Setting
@@ -33,8 +23,8 @@ Inline picture of the abstraction ladder:
 	•	Primitives are partitioned
 $$\Sigma = \Sigma_X \;\cup\; \Sigma_Y \;\cup\; \Sigma_{\times},$$
 where $\Sigma_X$ edits only $x$, $\Sigma_Y$ edits only $y$, and $\Sigma_{\times}$ are cross-ops (e.g., `add_first_to_second`: $(x,y)\mapsto(x,\,y+x)$).
-A program is a word $p\in\Sigma^{*}$ with standard functional semantics $⟦p⟧:G\rightarrow G$.
-	•	Supervision: dataset $D=\{(s_i,t_i)\}\subseteq G\times G$. Goal: find $p$ with $\forall i,\ ⟦p⟧(s_i)=t_i$.
+A program is a word $p\in\Sigma^{*}$ with standard functional semantics $\llbracket p\rrbracket:G\rightarrow G$.
+	•	Supervision: dataset $D=\{(s_i,t_i)\}\subseteq G\times G$. Goal: find $p$ with $\forall i,\ \llbracket p\rrbracket(s_i)=t_i$.
 
 ⸻
 
@@ -50,13 +40,13 @@ An element $a=(p_X,p_Y)$ means "do $p_X$ on $x$ and $p_Y$ on $y$, with no cross-
 
 Because $\Sigma_X$ commutes with $\Sigma_Y$,
 $$e:A\to \Sigma^{*},\quad e(p_X,p_Y)=\text{any interleaving of }p_X,p_Y$$
-is well-defined up to semantic equivalence: all such interleavings produce the same $⟦e(p_X,p_Y)⟧$ on $G$.
+is well-defined up to semantic equivalence: all such interleavings produce the same $\llbracket e(p_X,p_Y)\rrbracket$ on $G$.
 
 3.3 Solve in A
 
 Project the dataset onto coordinates and synthesize independently:
-$$\forall i:\ \pi_X(⟦p_X⟧(s_i))=\pi_X(t_i),\qquad
-\forall i:\ \pi_Y(⟦p_Y⟧(s_i))=\pi_Y(t_i).$$
+$$\forall i:\ \pi_X(\llbracket p_X\rrbracket(s_i))=\pi_X(t_i),\qquad
+\forall i:\ \pi_Y(\llbracket p_Y\rrbracket(s_i))=\pi_Y(t_i).$$
 If both succeed, return $e(p_X,p_Y)$.
 
 Intuition. $A$ "turns off" the wires between coordinates, producing two small searches.
@@ -80,12 +70,6 @@ Define
 $$e^{+}(p_X,\alpha)\in \Sigma^{*}$$
 by interleaving $p_X$ with $K$ copies of $\kappa$ inserted just before the $x$-op at each slot index in $\alpha$. (If needed, $Y$-only ops that commute with $\Sigma_X$ can be appended without changing the interface.)
 
-Inline picture of A^{+} objects:
-
-p_X:     [ X₁ ] [ X₂ ] [ X₃ ] [ X₄ ] [ X₅ ]  …  [ X_L ]
-slots:   ^ 0   ^ 1     ^ 2     ^ 3     ^ 4        ^ L
-α:              ↑                 ↑
-insert κ here   |                 |
 
 4.3 Solve-then-Refine (Compositional+)
 	1.	Solve in $A$: find $p_X$ satisfying the $x$-projection of $D$.
@@ -146,23 +130,7 @@ Global nodes $1609 \to 32061$ as $K:0\to3$; Compositional+ stays near $372$–$3
 
 ⸻
 
-7 Does This Instantiate the Original Plan?
-	•	Yes for $A$. $A$ is a direct instantiation of "lift to an abstract, easier domain; solve; embed." The embedding $e$ and separability proofs are standard.
-	•	Qualified yes for $A^{+}$. $A^{+}$ refines $A$ by adding a finite interface (cross-op placements). This is an abstraction–refinement pipeline
-$$A \;\xrightarrow{\text{add interface}}\; A^{+} \;\xrightarrow{e^{+}}\; G,$$
-with a concrete completeness guarantee under triangular couplings.
-It does follow the spirit of the note (progressive refinement toward concrete solvability), though it abstracts the program/search space rather than the task state space emphasized in the note’s ARC framing.
-
-⸻
-
-8 Limitations and Next Steps
-	•	Two-way couplings. If $\Sigma_{\times}$ also includes `add_second_to_first`, $x$ cannot be solved in isolation. Remedy: an AND–OR refinement that alternates partial $X$- and $Y$-solves while growing the interface grammar (an $A^{++}$).
-	•	Beyond identity embeddings. Port to grids (ARC): $A$ as attribute factorization (shape/color), $A^{+}$ as small wiring constraints (e.g., "color-from-shape"), moving closer to the note's state-space abstractions.
-	•	Heuristics. Cost-guided search, CEGIS, or learned guidance would likely amplify the benefit of $A$/$A^{+}$.
-
-⸻
-
-9 Conclusion
+7 Conclusion
 
 Distinguishing two abstraction layers crystallizes the method:
 	•	$A$: cross-free factorization—cheap, complete for separable tasks.
