@@ -321,4 +321,36 @@ With $m_X=2$, $m_Y=1$, $m_\times=1$, $(L_X,L_Y,K)=(4,2,1)$,
 Thus $A^{+}$ compresses the concrete family by a factor ${1680}/{80}=21=\binom{7}{2}$, the number of purely Y-interleavings
 that are semantically redundant under the commutation assumptions.
 
+
+\section{Extension: Parity as a Third Abstraction Level ($A^{++}$)}
+
+After solving in $A$ and refining in $A^{+}$, we can add a lightweight third layer that enforces parity constraints. This extension demonstrates how domain-specific properties can be layered onto the core abstraction-refinement framework.
+
+\subsection{Motivation}
+
+Many program synthesis tasks exhibit structural invariants beyond cross-coupling patterns. For integer domains, parity (even/odd) constraints are common: programs that preserve evenness, maintain sign patterns, or respect modular arithmetic. Rather than encoding these constraints into the DSL primitives, we can add them as a post-synthesis verification step.
+
+\subsection{Informal Definition}
+
+Let $A^{++} \subseteq A^{+}$ be the subset of interface-refined programs that preserve even parity when executed on even inputs. Formally, a program $(p_X, \alpha) \in A^{+}$ belongs to $A^{++}$ if all intermediate values during execution remain even whenever the initial state is even.
+
+\subsection{Verification Procedure}
+
+Given a candidate program from $A^{+}$:
+\begin{enumerate}
+    \item Execute the program on a synthetic even input (e.g., $(0,0)$).
+    \item Track the parity of both coordinates after each primitive operation.
+    \item Accept the program if parity is preserved throughout; reject otherwise.
+\end{enumerate}
+
+This verification requires no modification to the core synthesis algorithm—it operates as a filter on $A^{+}$ candidates.
+
+\subsection{Example: Even-Preserving Synthesis}
+
+Consider a DSL extended with both even-preserving operations (\texttt{inc2\_x}, \texttt{double\_x}) and parity-flipping operations (\texttt{inc1\_x}). The target function $x' = 2x + 10$, $y' = y + x + 4$ can be realized using only even-preserving primitives.
+
+The $A^{++}$ filter would accept programs that exclusively use \texttt{inc2\_x} and \texttt{double\_x}, while rejecting any program containing \texttt{inc1\_x}—even if such programs are functionally correct on the training data.
+
+This extension demonstrates that the abstraction-refinement approach can accommodate domain-specific constraints without compromising the core algorithmic structure.
+
 \end{document}
