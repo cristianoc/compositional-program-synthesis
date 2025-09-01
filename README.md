@@ -52,19 +52,6 @@ These results suggest the approach is worth exploring further.
 
 ---
 
-### Formalization (notation)
-| Symbol | Meaning |
-|---|---|
-| **G** | Concrete problem domain (e.g., grids, strings, programs, structured data). |
-| **A** | Abstract domain. |
-| `e: A → G` | Embedding (renderer) from abstract to concrete. |
-| Mapping | For each training pair `(x, y)` and test input `x_test`, find `(x̂, ŷ)` and `x̂_test` in **A** such that `e(x̂) ≈ x` and `e(ŷ) ≈ y` (≈ = task agreement). |
-| `f_A: A → A` | Abstract solver mapping `x̂` to `ŷ`; predict `ŷ_test = f_A(x̂_test)`, then output `e(ŷ_test)`. |
-
-*A simple, consistent mapping—and its simplicity—are used as evidence that the abstraction suits the task.*
-
----
-
 ### Scope (what this document does **not** prescribe)
 How to **obtain** abstractions is intentionally left open. This README defines the problem, interfaces, and evaluation framing only. Possible mechanisms—enumeration from a fixed library, LLM-guided proposals, meta-learned proposers, etc.—can vary by domain and application.
 
