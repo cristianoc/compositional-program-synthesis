@@ -1,9 +1,9 @@
 {
   "G": {
     "total_candidates": 2404,
-    "num_valid": 442,
-    "avg_tries_to_success": 5.3933333333333335,
-    "wall_time_s": 3.872457981109619,
+    "num_valid": 441,
+    "avg_tries_to_success": 5.405,
+    "wall_time_s": 3.8438291549682617,
     "sample_valid": [
       [
         "identity",
@@ -61,7 +61,7 @@
     "total_candidates": 172,
     "num_valid": 4,
     "avg_tries_to_success": 35.57333333333333,
-    "wall_time_s": 0.196699857711792,
+    "wall_time_s": 0.3126966953277588,
     "sample_valid": [
       [
         "max_id",
@@ -85,7 +85,7 @@
     "total_candidates": 2,
     "num_valid": 2,
     "avg_tries_to_success": 1.0,
-    "wall_time_s": 0.02817082405090332,
+    "wall_time_s": 0.034467220306396484,
     "sample_valid": [
       [
         "max_id",
