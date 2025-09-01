@@ -22,6 +22,8 @@ Starting from a concrete problem domain **G** (grids, programs, structured data)
 
 **Result:** Exponential search space reduction when abstractions are good; graceful recovery when they fail.
 
+**Key insight:** An abstraction is plausible when there exists a mapping from the training examples and test input into the abstract domain. The existence of this mapping indicates the abstraction is consistent with the task.
+
 ---
 
 ### Results
