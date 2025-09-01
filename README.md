@@ -170,7 +170,7 @@ compositional-program-synthesis/
     dsl.py                           # domain-specific language implementation
     challenging_metrics.json        # metrics data for challenging tasks
     challenging_metrics.txt         # human-readable metrics summary
-    compositional_abstractions.tex  # LaTeX paper on compositional abstractions
+    compositional_abstractions.tex  # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
     compositional_abstractions.pdf  # compiled paper
     README.md                       # documentation for DSL experiments
   program_synthesis/
