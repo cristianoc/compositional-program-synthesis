@@ -28,6 +28,8 @@ Starting from a concrete problem domain **G** (grids, programs, structured data)
 - *ARC:* if every training grid is 7×12, there exists a mapping of the examples and test input into the abstract shape class “7×12”; that existence indicates the size abstraction is consistent with the task.
 - *Inductive:* if all training pairs satisfy “even-in ⇒ even-out,” there exists a mapping of each pair (x,y) into a parity abstraction that records (parity(x), parity(y)) ∈ {0,1}²; that existence indicates a parity abstraction is consistent with the task property.
 
+Note: Consistency is necessary but not sufficient. Different abstractions can admit such mappings on the same training pairs, and a consistent abstraction can still fail if its constraint does not hold for the (unknown) test output (e.g., train grids are 7×12 but the test grid is 9×12; train outputs are even but the test output is odd).
+
 ---
 
 ### Results
