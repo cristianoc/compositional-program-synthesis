@@ -1,6 +1,6 @@
 ## Compositional Reasoning via Abstraction–Refinement for Program Synthesis
 
-> A framework for program synthesis from examples using compositional abstractions and refinement.
+> A framework for program synthesis from examples using compositional abstractions and refinement. Includes two concrete instantiations: DSL symmetry elimination and exact interface abstraction for product domains.
 
 ### Why
 Program synthesis from examples often attacks the whole task at once, searching a huge space of possible programs whose cost grows (often exponentially) with problem complexity. This project explores **compositional reasoning**: repeatedly solve a **simpler abstraction** of the task, then **refine** back to the concrete problem domain.  
@@ -161,7 +161,7 @@ compositional-program-synthesis/
     README.md                       # documentation for DSL experiments
   program_synthesis/
     scaling.py                      # scaling analysis and performance evaluation
-    compositional_synthesis.tex    # LaTeX paper on compositional synthesis
+    compositional_synthesis.tex    # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
     compositional_synthesis.pdf    # compiled paper
     compositional_synthesis.{aux,log,out}  # LaTeX build artifacts
     nodes_vs_k_scaling.png         # visualization: node count vs. parameter k
@@ -182,12 +182,15 @@ This instantiation implements compositional abstractions that eliminate symmetri
 
 **Results**: Achieves dramatic search space reduction from 2404→2 programs (-99.917%) with 138× speedup, demonstrating near-zero search cost with 100% validity rate on the composed abstractions.
 
-#### 2. Program Synthesis via Cross-Free Factorization (`program_synthesis/`)
-This instantiation uses a two-level abstraction approach for compositional program synthesis:
-- **A (Cross-free factorization)**: Solves coordinates independently, ignoring cross-operations
-- **A⁺ (Interface refinement)**: Adds minimal cross-operation interfaces to restore necessary couplings
+#### 2. Compositional Synthesis via Exact Interface Abstraction (`program_synthesis/`)
+This instantiation implements a two-phase approach for program synthesis on product domains (e.g., integer pairs):
 
-**Results**: Achieves 7-60× fewer explored nodes and 8-180× speedup over global search methods, validating the effectiveness of factorized synthesis with selective refinement.
+- **Phase 1 (Cross-free factorization)**: Solve coordinates independently in abstract space `A`, ignoring cross-operations
+- **Phase 2 (Interface refinement)**: Enumerate exact interface `A⁺` specifying where fixed number of cross-operations are inserted relative to X-program
+
+The approach targets DSLs with triangular coupling (cross-operations read X but only modify Y), uses precise mathematical foundations with commutation assumptions, and includes a parity-aware extension (`A⁺⁺`) as an optional third layer.
+
+**Results**: Achieves 4-59× fewer explored nodes (geometric mean) and 8-184× speedup over global search, with identical accuracy. The mathematical framework is exact under stated assumptions.
 
 Both implementations provide concrete evidence that the abstraction-refinement framework can yield substantial computational advantages while maintaining solution quality.
 
