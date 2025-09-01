@@ -38,15 +38,15 @@ Two toy instantiations show meaningful speedups:
 
 #### 1. ARC-AGI Grid Puzzles
 Eliminates symmetries in grid puzzles through two abstraction levels:
-- **A1**: Palette canonicalization (quotient out color symmetries)
-- **A2**: Object ordering canonicalization (quotient out enumeration symmetries)
+- **A₁**: Palette canonicalization (quotient out color symmetries)
+- **A₂**: Object ordering canonicalization (quotient out enumeration symmetries)
 
 **Result**: 2404→2 programs (-99.917%), 138× speedup.
 
 #### 2. Inductive Programming (Flash Fill style)
 Two-phase approach for program synthesis on product domains:
-- **Phase 1**: Cross-free factorization (solve coordinates independently) 
-- **Phase 2**: Interface refinement (add minimal cross-operation coupling)
+- **A**: Cross-free factorization (solve coordinates independently) 
+- **A⁺**: Interface refinement (add minimal cross-operation coupling)
 
 **Result**: 4-59× fewer nodes, 8-184× speedup over global search.
 
@@ -72,7 +72,7 @@ How to **obtain** abstractions is intentionally left open. This README defines t
 ### Examples
 
 **Grid puzzles:**
-- **Missing color**: detect unused color → drop it in `A` → solve in smaller palette → embed back
+- **Missing color**: detect unused color → drop it in **A₁** → solve in smaller palette → embed back
 - **Object symmetry**: factor out rotation/reflection → reason over object graphs → render with canonical pose
 - **Downsampling**: compress blocks (2×2→1×1) → synthesize macro logic → upsample back
 
@@ -98,7 +98,7 @@ Node = {
 }
 ```
 
-Edges represent further abstraction `A → A₂` or refinement choices (e.g., symmetry, palette subset). We run bounded best-first / beam search over the tree. Leaves emit candidate predictions in **G** via `e`.
+Edges represent further abstraction `A → A₂` or refinement choices (e.g., symmetry, palette subset). We run bounded best-first / beam search over the tree. Leaves emit candidate predictions in **G** via embedding function **e**.
 
 #### Evidence & scoring
 - **Training consistency:** how well the abstract hypothesis explains `(x_i, y_i)` after embedding.  
