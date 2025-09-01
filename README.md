@@ -24,6 +24,10 @@ Starting from a concrete problem domain **G** (grids, programs, structured data)
 
 **Key insight:** An abstraction is plausible when there exists a mapping from the training examples and test input into the abstract domain. The existence of this mapping indicates the abstraction is consistent with the task.
 
+*Examples:*
+- *ARC:* if every training grid is 7×12, there exists a mapping of the examples and test input into the abstract shape class “7×12”; that existence indicates the size abstraction is consistent with the task.
+- *Inductive:* if all training pairs satisfy “even-in ⇒ even-out,” there exists a mapping of each pair (x,y) into a parity abstraction that records (parity(x), parity(y)) ∈ {0,1}²; that existence indicates a parity abstraction is consistent with the task property.
+
 ---
 
 ### Results
