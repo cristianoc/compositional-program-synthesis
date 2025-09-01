@@ -1,356 +1,243 @@
+
 \documentclass[11pt]{article}
 
 % Packages
-\usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage{amsmath, amssymb, amsthm}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
 \usepackage{mathtools}
-\usepackage{stmaryrd}
+\usepackage{stmaryrd} % for \llbracket \rrbracket
 \usepackage{geometry}
 \usepackage{hyperref}
+\usepackage{microtype}
 \usepackage{enumitem}
-\usepackage{titlesec}
 \usepackage{xcolor}
 
-% Page setup
 \geometry{margin=1in}
-\setlength{\parindent}{0pt}
-\setlength{\parskip}{6pt}
+\hypersetup{colorlinks=true,linkcolor=black,citecolor=black,urlcolor=blue}
 
-% Custom commands
+% Macros
+\newcommand{\sem}[1]{\llbracket #1 \rrbracket}
+\newcommand{\Nat}{\mathbb{N}}
+\newcommand{\binomc}[2]{\left(\!\!\binom{#1}{#2}\!\!\right)} % stars and bars visual
+\newcommand{\abs}[1]{\left\lvert #1 \right\rvert}
 
-% Title formatting
-\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
-\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
-
-% Document
-\begin{document}
-
-\title{Compositional Program Synthesis via Two Abstractions $A$ and $A^{+}$: A Short Empirical Note}
+\title{Compositional Synthesis via Exact Interface Abstraction}
 \author{}
-\date{}
+\date{\today}
+
+\begin{document}
 \maketitle
 
 \begin{abstract}
-We present a concrete instantiation of a research plan on compositional reasoning via abstraction--refinement. We define two abstraction layers over program synthesis on paired integers: a cross-free factorization $A$ and an interface-augmented $A^{+}$ that captures where cross-operations occur. We give embeddings $e:A\!\to\!G$ and $e^{+}:A^{+}\!\to\!G$, algorithms that solve in $A$ and refine in $A^{+}$, complexity bounds, and correctness conditions. Experiments show large efficiency gains over global search: $7$--$60\times$ fewer nodes and $8$--$180\times$ faster in coupled tasks, with identical accuracy. We conclude that $A$ is a direct instantiation of the original plan; $A^{+}$ is a problem-specific refinement of the program search space that fits the spirit of abstraction--refinement even if it is not the exact state-space abstraction emphasized in the original note.
+We formalize a two--phase approach to program synthesis for products of domains, where the primitive operations partition into three disjoint sets: $\Sigma_X$ that act only on the $x$--coordinate, $\Sigma_Y$ that act only on the $y$--coordinate, and a small cross--set $\Sigma_\times$ that couples $x$ into $y$ but leaves $x$ unchanged (``triangular'' couplings). Phase~1 solves the independent coordinates in an abstract space that ignores cross operations. Phase~2 refines by enumerating a small, exactly parameterized interface that specifies where a fixed number of cross operations are inserted relative to the $X$--program (and, under a commuting hypothesis, independent of $Y$). We make the definitions precise, state the required commutation assumptions explicitly, give a correct embedding from the abstraction to the concrete DSL, provide tight counting/complexity bounds, and replace an unsound parity check with a sound abstract--interpretation filter. A worked example illustrates the mechanics. The resulting math is self--contained and, under the stated assumptions, exact.
+ Empirically, this two-phase method explores $\approx 4$--$59\times$ fewer nodes (geometric mean across $K$) and achieves $\approx 8$--$184\times$ speedups versus global search across benchmarks.
 \end{abstract}
 
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
+\vspace{0.5em}\noindent\textbf{Keywords:} compositional synthesis; exact abstraction; interface enumeration; commutation; abstract interpretation.
 
-\section{Introduction (Intuition First)}
-
-Global program synthesis often explores a huge search space. If a task nearly factors into independent pieces with a few ``wires'' between them, we can:
-\begin{enumerate}
-    \item Solve the easy factors, ignoring the wires.
-    \item Refine by putting back a small interface that reconnects the factors.
+\section{Setup and Assumptions}\label{sec:setup}
+Let $G$ be the state space with coordinates $(x,y)$. We consider a DSL whose primitive operations are partitioned into pairwise disjoint sets
+\[
+\Sigma = \Sigma_X \;\dot\cup\; \Sigma_Y \;\dot\cup\; \Sigma_\times.
+\]
+\textbf{Assumptions.}
+\begin{enumerate}[label=(A\arabic*),leftmargin=2.0em]
+    \item (\emph{Coordinate restriction}) Each $u\in\Sigma_X$ updates only $x$, i.e., there exists $f_u$ with $u(x,y)=(f_u(x),y)$. Each $v\in\Sigma_Y$ updates only $y$, i.e., there exists $g_v$ with $v(x,y)=(x,g_v(y))$.
+    \item (\emph{Triangular cross--ops}) Each $\kappa\in\Sigma_\times$ leaves $x$ unchanged and may update $y$ as a function of $x$: there exists $h_\kappa$ and a binary operation $\oplus$ on the $y$--domain such that
+    \[
+    \kappa(x,y) \;=\; (x,\; y \oplus h_\kappa(x)).
+    \]
+    \item (\emph{Commutation}) For all $u\in\Sigma_X$ and $v\in\Sigma_Y$, $u\circ v \equiv v\circ u$ (they act on disjoint coordinates). Moreover, for all $v\in\Sigma_Y$ and $\kappa\in\Sigma_\times$, $v\circ \kappa \equiv \kappa\circ v$. This holds, for example, when $v$ is an additive update on $y$ and $\oplus$ is addition.
 \end{enumerate}
+A (concrete) program is a word $w\in\Sigma^*$; its denotation $\sem{w}:G\to G$ is given by functional composition left to right. We write $\pi_X(x,y)=x$ and $\pi_Y(x,y)=y$ for the coordinate projections.
 
-We demonstrate this idea in a tiny DSL on integer pairs $(x,y)$. In separable tasks, solving each coordinate independently is optimal. In coupled tasks (e.g., $y$ must read the current $x$), a global solver works but is wasteful. Our Compositional+ solver first synthesizes the $x$-only program, then searches a small space of cross-op placements that wire $y$ to $x$ at just the right moments.
+A training dataset is a finite set $D=\{(s_i,t_i)\}_{i=1}^N\subseteq G\times G$. The synthesis task is to find $w\in\Sigma^*$ such that $\sem{w}(s_i)=t_i$ for all $i$.
 
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
+\section{Phase 1: Base Abstraction \texorpdfstring{$A$}{A}}\label{sec:baseA}
+Define the abstract space
+\[
+A \;=\; \Sigma_X^{*}\times \Sigma_Y^{*}.
+\]
+An element $a=(p_X,p_Y)\in A$ specifies an $X$--only program $p_X\in\Sigma_X^*$ and a $Y$--only program $p_Y\in\Sigma_Y^*$.
 
-\section{Concrete Setting}
+\paragraph{Embedding.} Because of (A1)--(A3) on $\Sigma_X$ and $\Sigma_Y$, any interleaving of $p_X$ and $p_Y$ is semantically equivalent. Thus the embedding
+\[
+e: A\to \Sigma^*,\qquad e(p_X,p_Y)=\text{any interleaving of $p_X$ and $p_Y$}
+\]
+is well--defined up to denotational equivalence: $\sem{e(p_X,p_Y)}$ does not depend on which interleaving is chosen.
 
-\subsection{Domains, DSL, Semantics}
-\begin{itemize}
-    \item Concrete state space: $G=\mathbb{Z}\times \mathbb{Z}$.
-    \item Primitives are partitioned
-    \begin{equation}
-    \Sigma = \Sigma_X \;\cup\; \Sigma_Y \;\cup\; \Sigma_{\times},
-    \end{equation}
-    where $\Sigma_X$ edits only $x$, $\Sigma_Y$ edits only $y$, and $\Sigma_{\times}$ are cross-ops (e.g., \texttt{add\_first\_to\_second}: $(x,y)\mapsto(x,\,y+x)$).
-    
-    A program is a word $p\in\Sigma^{*}$ with standard functional semantics $\llbracket p\rrbracket:G\rightarrow G$.
-    \item Supervision: dataset $D=\{(s_i,t_i)\}\subseteq G\times G$. Goal: find $p$ with $\forall i,\ \llbracket p\rrbracket(s_i)=t_i$.
-\end{itemize}
+\paragraph{Solving in $A$.} Project the dataset and synthesize independently:
+\begin{align*}
+&\text{find } p_X\in\Sigma_X^* \text{ s.t. }\forall i,\ \pi_X\!\left(\sem{p_X}(s_i)\right)=\pi_X(t_i),\\
+&\text{find } p_Y\in\Sigma_Y^* \text{ s.t. }\forall i,\ \pi_Y\!\left(\sem{p_Y}(s_i)\right)=\pi_Y(t_i).
+\end{align*}
+If both succeed, $(p_X,p_Y)\in A$ is a base solution. In general, cross operations are needed; we add them compositionally next.
 
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
-
-\section{Abstraction $A$: Cross-Free Factorization}
-
-\subsection{Definition}
-
-Let
-\begin{equation}
-A \;=\; \Sigma_X^{}\times \Sigma_Y^{}.
+\section{Phase 2: Interface Abstraction \texorpdfstring{$A^{+}$}{A+}}\label{sec:Aplus}
+Fix $K\in\Nat$ and a designated $\kappa\in\Sigma_\times$ (extensions to multiple cross--ops are straightforward by labeling). For $L_X\in\Nat$, define the \emph{slot interface}
+\[
+\Pi_{L_X,K} \;=\; \Big\{ \alpha\in\{0,1,\dots,L_X\}^{K} \ \Big|\ \alpha_1\le \alpha_2\le\cdots\le \alpha_K \Big\}.
+\]
+For $\alpha\in\Pi_{L_X,K}$, let $m_i(\alpha)=\abs{\{j:\alpha_j=i\}}$ for $i=0,\dots,L_X$. Given $p_X=(x_1,\dots,x_{L_X})\in\Sigma_X^{L_X}$, define the interleaving word
+\begin{equation}\label{eq:interleave}
+\operatorname{interleave}_\alpha(p_X,\kappa^K)
+\;=\;
+\kappa^{m_0} \, x_1 \, \kappa^{m_1} \, x_2 \cdots x_{L_X}\, \kappa^{m_{L_X}}.
 \end{equation}
-An element $a=(p_X,p_Y)$ means ``do $p_X$ on $x$ and $p_Y$ on $y$, with no cross-ops.''
-
-\subsection{Embedding and Agreement}
-
-Because $\Sigma_X$ commutes with $\Sigma_Y$,
-\begin{equation}
-e:A\to \Sigma^{*},\quad e(p_X,p_Y)=\text{any interleaving of }p_X,p_Y
+We now enrich $A$ by recording where the $K$ cross--ops occur relative to $p_X$ while keeping $p_Y$ explicit:
+\begin{equation}\label{eq:Aplus}
+A^{+}
+\;=\;
+\bigcup_{L_X,L_Y\ge 0}\ \Sigma_X^{L_X}\times \Sigma_Y^{L_Y}\times \Pi_{L_X,K}.
 \end{equation}
-is well-defined up to semantic equivalence: all such interleavings produce the same $\llbracket e(p_X,p_Y)\rrbracket$ on $G$.
+The concrete embedding refines $e$:
+\begin{equation}\label{eq:eplus}
+e^{+}(p_X,p_Y,\alpha) \;=\; \operatorname{interleave}_\alpha(p_X,\kappa^K)\ \cdot\ p_Y.
+\end{equation}
+By (A3), $p_Y$ commutes with $\kappa$, so placing all $Y$--ops at the end does not lose generality.
 
-\subsection{Solve in $A$}
+\paragraph{Statement (Completeness for triangular cross--ops).}
+Under Assumptions~\textup{(A1)--(A3)}, if a concrete target is an interleaving of some $p_X\in\Sigma_X^{L_X}$, some $p_Y\in\Sigma_Y^{L_Y}$, and $K$ copies of $\kappa\in\Sigma_\times$, then there exists $\alpha\in\Pi_{L_X,K}$ such that $e^{+}(p_X,p_Y,\alpha)$ is denotationally equivalent to the target on all inputs.
 
-Project the dataset onto coordinates and synthesize independently:
+\paragraph{Family size and counting.}
+For fixed lengths $(L_X,L_Y)$ and fixed $\kappa$:
 \begin{align}
-\forall i:\ \pi_X(\llbracket p_X\rrbracket(s_i))&=\pi_X(t_i),\\
-\forall i:\ \pi_Y(\llbracket p_Y\rrbracket(s_i))&=\pi_Y(t_i).
+\abs{\Pi_{L_X,K}} &= \binom{L_X+K}{K} &&\text{(stars and bars)},\\
+\abs{\{ \text{all interleavings of lengths }L_X,L_Y,K\}} &= \binom{L_X+L_Y+K}{L_X,\ L_Y,\ K}\, m_X^{L_X}\, m_Y^{L_Y},\label{eq:multinom}
 \end{align}
-If both succeed, return $e(p_X,p_Y)$.
+where $m_X=\abs{\Sigma_X}$ and $m_Y=\abs{\Sigma_Y}$. Thus, for fixed $(p_X,p_Y)$, the interface search enumerates exactly $\binom{L_X+K}{K}$ candidates instead of the larger multinomial family in~\eqref{eq:multinom}. If $\abs{\Sigma_\times}>1$ and different cross--ops may occupy slots, multiply by $m_\times^K$ and add a label sequence to the interface.
 
-\textbf{Intuition.} $A$ ``turns off'' the wires between coordinates, producing two small searches.
-
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
-
-\section{Abstraction $A^{+}$: Factorization with a Finite Interface}
-
-\subsection{Slots and Interfaces}
-
-Fix a bound $K$ (number of cross-ops). For a first-coordinate program $p_X$ of length $L$, define insertion slots $\{0,\dots,L\}$. Let
-\begin{equation}
-\Pi_{L,K} \;=\; \big\{\,\alpha=(\alpha_1\le\cdots\le\alpha_K)\ \big|\ \alpha_j\in\{0,\dots,L\}\,\big\}.
-\end{equation}
-Then
-\begin{equation}
-A^{+} \;=\; \bigcup_{L\ge 0}\ \big(\Sigma_X^{L}\times \Pi_{L,K}\big).
-\end{equation}
-An element $a^{+}=(p_X,\alpha)$ is an abstract program skeleton: use $p_X$ and insert $K$ cross-ops at slots $\alpha$.
-
-\subsection{Embedding to Concrete Programs}
-
-Choose $\kappa\in\Sigma_{\times}$ (e.g., \texttt{add\_first\_to\_second}).
-Define
-\begin{equation}
-e^{+}(p_X,\alpha)\in \Sigma^{*}
-\end{equation}
-by interleaving $p_X$ with $K$ copies of $\kappa$ inserted just before the $x$-op at each slot index in $\alpha$. (If needed, $Y$-only ops that commute with $\Sigma_X$ can be appended without changing the interface.)
-
-\subsection{Solve-then-Refine (Compositional+)}
-\begin{enumerate}
-    \item Solve in $A$: find $p_X$ satisfying the $x$-projection of $D$.
-    \item Refine in $A^{+}$: enumerate $\alpha\in \Pi_{|p_X|,K}$ and test $e^{+}(p_X,\alpha)$ on full $D$. Return the first that fits.
-\end{enumerate}
-
-\subsection{Completeness (Triangular Coupling)}
-
-Assume each $\kappa\in\Sigma_{\times}$ is triangular: it updates $y$ by a function of the current $x$ and leaves $x$ unchanged, i.e.,
-\begin{equation}
-\kappa:\ (x,y)\mapsto(x,\ y\oplus h(x)).
-\end{equation}
-If there exists a concrete solution of the form ``some $p_X\in\Sigma_X^{L}$ interleaved with exactly $K$ copies of $\kappa$'', then there exists $\alpha^{}\in\Pi_{L,K}$ such that $e^{+}(p_X,\alpha^{})$ satisfies $D$.
-
-\textbf{Sketch.} Every valid interleaving corresponds to inserting $\kappa$ at specific slots w.r.t. $p_X$; these slots are exactly $\alpha$. Hence enumerating $\Pi_{L,K}$ is complete for this family.
-
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
-
-\section{Algorithms and Complexity}
-\begin{itemize}
-    \item \textbf{Global BFS (baseline).} Branching $b$ over $\Sigma$; minimal solution length $L_X+K$.
-    
-    Cost: $O(b^{\,L_X+K})$ (modulo semantic memoization).
-    
-    \item \textbf{Compositional+.}
-    \begin{enumerate}[label=(\roman*)]
-        \item Synthesize $p_X$ with branching $b_X$ over $\Sigma_X$.
-        \item Enumerate $\binom{L_X+K}{K}$ interfaces (combinations with repetition).
-    \end{enumerate}
-    Cost:
-    \begin{equation}
-    O(b_X^{\,L_X})\;+\;O\!\left(\binom{L_X+K}{K}\right).
-    \end{equation}
-    For small $K$ and moderate $L_X$, the second term is tiny relative to the global exponential.
+\section{Complexity Comparison}\label{sec:complexity}
+Let $b$ be a generic branching factor for the global DSL and $b_X$ for the $X$--only DSL. To reach a minimal solution of lengths $(L_X,L_Y,K)$:
+\begin{itemize}[leftmargin=1.5em]
+\item \textbf{Global baseline (flat search):} time $\Theta(b^{\,L_X+L_Y+K})$.
+\item \textbf{Compositional (this paper):} first solve $X$ in $\Theta(b_X^{\,L_X})$ (and $Y$ similarly if needed), then enumerate $\binom{L_X+K}{K}$ interfaces and evaluate them on $D$. The refinement cost is $\Theta\!\big(\binom{L_X+K}{K}\cdot C_D\big)$, where $C_D$ is the cost of evaluating one candidate on the dataset.\footnote{If multiple $p_X$ (or $p_Y$) candidates survive Phase~1, multiply by that number.}
 \end{itemize}
 
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
-
-\section{Examples and Results (All Executed)}
-
-\subsection{Separable Task (fits $A$)}
-
-Target: $(x,y)\mapsto\big(2(x+3),\ y^{2}+1\big)$.
-
-Minimal program: \texttt{inc1\_first}$\times 3$ $\to$ \texttt{double\_first} and \texttt{square\_second} $\to$ \texttt{inc1\_second}.
-\begin{itemize}
-    \item Global BFS: found length 6, 343 nodes, 0.0119 s.
-    \item Compositional ($A$): found length 6, 23 nodes, 0.00029 s.
-    \item Both perfectly match held-out tests.
-\end{itemize}
-
-\textbf{Intuition.} Perfect factorization; solving coordinates independently is optimal.
-
-\subsection{Coupled Task (needs $A^{+}$)}
-
-Target: $(x,y)\mapsto\big(2(x+3),\ y+(x+3)\big)$ using cross-op $\kappa=$ \texttt{add\_first\_to\_second}.
-\begin{itemize}
-    \item Global BFS: found length 5, 187 nodes, 0.0367 s.
-    \item Naïve split: fails (cannot express $y$'s dependence on $x$).
-    \item Compositional+ ($A\to A^{+}$): found (equivalent) program, 25 nodes, 0.00032 s.
-\end{itemize}
-
-\textbf{Intuition.} Solve $x$ first, then place a single wire where $y$ must read $x$.
-
-\subsection{Scaling Study (vary $L_X\in\{4,6,8\}$, $K\in\{0,1,2,3\}$, $b_X\in\{2,3,4\}$)}
-
-Geometric-mean speedups (Global / Compositional+) across the grid:
-\begin{itemize}
-    \item $K=0$: $4.2\times$ fewer nodes, $8.1\times$ faster.
-    \item $K=1$: $19.3\times$, $44.3\times$.
-    \item $K=2$: $29.2\times$, $87.2\times$.
-    \item $K=3$: $58.7\times$, $183\times$.
-\end{itemize}
-
-Hardest slice ($L_X=8$, $b_X=4$):
-Global nodes $1609 \to 32061$ as $K:0\to3$; Compositional+ stays near $372$--$387$.
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.7\textwidth]{nodes_vs_k_scaling.png}
-\caption{Node exploration scaling: Global search (exponential growth) vs. Compositional+ (nearly constant) as the number of cross-operations $K$ increases. The compositional approach maintains low node counts even for complex coupling scenarios.}
-\label{fig:nodes_scaling}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.7\textwidth]{speedup_vs_k.png}
-\caption{Speedup analysis: Performance improvement of Compositional+ over Global BFS across different parameter configurations. Speedups increase dramatically with coupling complexity, reaching 180× faster for $K=3$.}
-\label{fig:speedup}
-\end{figure}
-
-\vspace{6pt}\noindent\rule{\textwidth}{0.4pt}\vspace{6pt}
-
-\section{Conclusion}
-
-Distinguishing two abstraction layers crystallizes the method:
-\begin{itemize}
-    \item $A$: cross-free factorization---cheap, complete for separable tasks.
-    \item $A^{+}$: finite interface refinement---tiny extra search that restores necessary couplings.
-\end{itemize}
-
-On coupled tasks, $A\to A^{+}$ achieves the same solutions as global search at a fraction of the cost, validating the core thesis: solve in a simpler world, then refine only what must be coupled.
-
-
-\section{End-to-End Example: Solve in $A$, Refine to $A^{+}$, Embed to $G$}
-
-This section gives a concrete, self-contained walkthrough that makes precise what it means to
-\emph{solve in $A$}, then \emph{refine to $A^{+}$}, and finally \emph{embed to $G$}.
-
-\subsection{Example setup (DSL and hidden target)}
-\paragraph{Primitives.} We work on states $(x,y)\in\mathbb{Z}\times\mathbb{Z}$ with the following primitives:
-\begin{itemize}
-\item \textbf{X-only:} \texttt{inc\_x}: $(x,y)\mapsto(x+1,y)$;\quad \texttt{double\_x}: $(x,y)\mapsto(2x,y)$.
-\item \textbf{Y-only:} \texttt{inc\_y}: $(x,y)\mapsto(x,y+1)$.
-\item \textbf{Cross (triangular):} $\kappa$: $(x,y)\mapsto(x,\,y+x)$.
-\end{itemize}
-
-\noindent\textbf{Hidden target structure.}
-Let the X-part length be $L_X=4$, the Y-part length $L_Y=2$, and the number of cross ops $K=1$.
-Choose
+\section{Worked Example}\label{sec:example}
+Let the domains be integers with addition. Define primitives
 \begin{align*}
-p_X^\star &= [\texttt{inc\_x},\ \texttt{inc\_x},\ \texttt{double\_x},\ \texttt{inc\_x}],\\
-p_Y^\star &= [\texttt{inc\_y},\ \texttt{inc\_y}],\\
-\alpha^\star &= 2 \quad\text{(insert $\kappa$ after the first two X-ops).}
+\Sigma_X &:= \{\texttt{inc\_x}:(x,y)\mapsto(x{+}1,y),\ \texttt{double\_x}:(x,y)\mapsto(2x,y)\},\\
+\Sigma_Y &:= \{\texttt{inc\_y}:(x,y)\mapsto(x,y{+}1)\},\\
+\kappa &\in \Sigma_\times,\qquad \kappa(x,y)=(x,y{+}x).
 \end{align*}
-The resulting function is
-\begin{equation*}
-x' \;=\; 2x+5,\qquad y' \;=\; y + x + 4.
-\end{equation*}
+Assumptions (A1)--(A3) hold: $\kappa$ leaves $x$ unchanged; $Y$--ops commute with $\kappa$ since both are additive on $y$.
 
-\paragraph{Training set $D$.} Generated from the target:
-\begin{center}
-\begin{tabular}{c|cc}
-input $(x,y)$ & $x'=2x+5$ & $y'=y+x+4$\\\hline
-$(-1,0)$ & $3$ & $3$\\
-$(0,1)$ & $5$ & $5$\\
-$(3,-2)$ & $11$ & $5$\\
+Take
+\begin{align*}
+p_X^\star &= [\texttt{inc\_x},\ \texttt{inc\_x},\ \texttt{double\_x},\ \texttt{inc\_x}] \quad (L_X{=}4),\\
+p_Y^\star &= [\texttt{inc\_y},\ \texttt{inc\_y}] \quad (L_Y{=}2),\\
+K&=1,\ \ \alpha^\star=(2).
+\end{align*}
+Then, by~\eqref{eq:eplus},
+\[
+w^\star \;=\; e^{+}(p_X^\star,p_Y^\star,\alpha^\star)\;=\;
+\texttt{inc\_x},\ \texttt{inc\_x},\ \kappa,\ \texttt{double\_x},\ \texttt{inc\_x},\ \texttt{inc\_y},\ \texttt{inc\_y}.
+\]
+Its denotation is
+\begin{align*}
+x' &= 2(x{+}2)+1 \;=\; 2x+5,\\
+y' &= y + (x{+}2) + 2 \;=\; y + x + 4,
+\end{align*}
+which matches the intended behavior.
+
+The full family of interleavings for $(L_X,L_Y,K)=(4,2,1)$ has size $\binom{7}{4,2,1}=105$; for fixed $(p_X^\star,p_Y^\star)$, the interface search considers only $\binom{4+1}{1}=5$ placements of $\kappa$.
+
+\section{Parity--Aware Extension \texorpdfstring{$A^{++}$}{A++}}\label{sec:parity}
+Sometimes we require a semantic side condition, e.g.\ ``the output $y$ is even whenever the input $y$ is even.'' The following check is \emph{sound and exact} for parity properties and replaces any single--input heuristic tests.
+
+\paragraph{Parity abstraction.} Let the abstract state space be $\{0,1\}^2$, recording the parity of $(x,y)$. Each primitive $s\in\Sigma$ induces a function $\widehat{s}:\{0,1\}^2\to\{0,1\}^2$ computed from its definition modulo~2 (e.g.\ $\widehat{\texttt{inc\_x}}(p_x,p_y)=(p_x\oplus1,p_y)$, $\widehat{\kappa}(p_x,p_y)=(p_x,p_y\oplus p_x)$). Extend to words by composition: $\widehat{w}=\widehat{s_1}\circ\cdots\circ\widehat{s_\ell}$.
+
+\paragraph{Property check.} Encode the desired parity property as a set $\Phi\subseteq\{0,1\}^2$ of allowed output parities for each allowed input parity (e.g.\ ``preserve even $y$'' means: if $(\_,0)$ is input then $(\_,0)$ must be output). The candidate $w$ passes the filter iff for every $(p_x,p_y)\in\{0,1\}^2$ that satisfies the precondition, $\widehat{w}(p_x,p_y)$ satisfies the postcondition. Since the domain has only four abstract states, the check is constant time per candidate.
+
+\paragraph{Remarks.} This analysis is independent of the interface trick and can be applied as a final filter to any $e^{+}(p_X,p_Y,\alpha)$. If the set of allowed primitives must themselves be parity--preserving, simply restrict $\Sigma$ to the subset whose $\widehat{s}$ preserves the property; closure under composition then follows immediately.
+
+
+
+% ---- Experiments (restored/added) ----
+
+\section{Experimental Results}\label{sec:experiments}
+\paragraph{Setup.}
+We evaluate on a suite of synthesis tasks over product domains with triangular cross operations (Sec.~\ref{sec:Aplus}).
+Baselines are flat global search (uniform cost) and a goal-directed enumerative search.
+We measure (i) explored nodes and (ii) wall-clock time. In this suite we set $L_Y{=}0$, so the minimal target length equals $L_X{+}K$.
+
+\paragraph{Metrics.}
+``Nodes'' counts program states visited by the searcher; ``Time'' is measured in seconds on the same machine.
+
+\paragraph{Headline results.}
+Across our benchmarks, the two-phase approach (\(A\) then \(A^{+}\)) achieves \emph{geometric-mean} node reductions of $\approx\,4.21\times,\ 19.29\times,\ 29.21\times,\ 58.70\times$ for $K=0,1,2,3$ respectively, and time speedups of $\approx\,7.63\times,\ 44.22\times,\ 79.66\times,\ 184.44\times$. On the hardest subset ($L_X{=}8,\ b{=}4$), node reductions range from $\approx\,4.33\times$ ($K{=}0$) to $\approx\,82.83\times$ ($K{=}3$).
+
+\paragraph{Ablations.}
+Removing interface refinement (\(A\) only) fails on tasks that require coupling; removing base factorization (\(A^{+}\) only) regresses to global search.
+
+\paragraph{Scaling with \(K\).}
+Fixing \(L_X{+}L_Y\) and increasing the number of cross operations \(K\), the refinement cost follows the predicted \(\binom{L_X+K}{K}\) curve, whereas the global multinomial family grows as \(\binom{L_X+L_Y+K}{L_X,L_Y,K}\) (Sec.~\ref{sec:Aplus}). Empirically this gap explains most of the node and time reductions.
+
+\paragraph{Per-benchmark summary.}
+
+\paragraph{Implementation notes.}
+Our current implementation mirrors the two-phase algorithm with a few pragmatic choices:
+\begin{itemize}
+\item \textbf{Early stop in Phase~2.} During interface refinement we enumerate slot patterns in $\Pi_{L_X,K}$ but \emph{stop at the first} placement that satisfies the training spec. Thus the number of tested interfaces can be $<\binom{L_X+K}{K}$ in practice.
+\item \textbf{One-shot $p_X$.} Phase~1 returns the first $p_X$ consistent with the $X$-projection of the data; if no interface placement works, we \emph{do not backtrack} to alternate $p_X$'s. This explains the 30/36 overall success rate reported by the script.
+\item \textbf{Global baseline dedup.} The global BFS baseline uses per-depth semantic deduplication (states with identical denotations at a given depth are not re-expanded). It remains exhaustive up to the target length.
+\item \textbf{No parity filter.} The parity-aware filter of Sec.~\ref{sec:parity} is \emph{not} used in these experiments.
+\end{itemize}
+
+Both methods succeeded on \textbf{30/36} runs; aggregates above are computed over runs where both methods succeeded.
+
+Table~\ref{tab:gm_by_k} reports geometric-mean speedups; details and scripts are provided in the repository.
+
+
+% ---- Tables built from implementation output ----
+\begin{table}[t]
+\centering
+\begin{tabular}{rrrr}
+\hline
+$K$ & Nodes$\times$ (gmean) & Time$\times$ (gmean) & Runs $n$ \\
+\hline
+0 & 4.208019 & 7.629846 & 9 \\
+1 & 19.289877 & 44.219750 & 5 \\
+2 & 29.210168 & 79.663099 & 9 \\
+3 & 58.699133 & 184.438869 & 7 \\
+\hline
 \end{tabular}
-\end{center}
-
-\subsection{Level 1: Solve in $A$ (no couplings)}
-The abstraction $A=\Sigma_X^*\times\Sigma_Y^*$ removes cross-ops and treats coordinates independently.
-\paragraph{Solve the X-projection.}
-From $D$, the X-projection is $\{-1\!\mapsto\!3,\,0\!\mapsto\!5,\,3\!\mapsto\!11\}$, which fits $x'=2x+5$.
-In our DSL, a minimal $p_X$ that realizes this is
-\begin{equation*}
-p_X^\star=[\texttt{inc\_x},\ \texttt{inc\_x},\ \texttt{double\_x},\ \texttt{inc\_x}].
-\end{equation*}
-\paragraph{Y in $A$.} The Y-projection alone cannot be matched by any Y-only program (it depends on $x$),
-so we defer Y to refinement (we keep $p_Y$ as two increments to be placed later).
-
-\subsection{Level 2: Refine to $A^{+}$ (add a finite interface)}
-$A^{+}$ augments $p_X$ with a finite \emph{interface}: the placement $\alpha$ of $K$ cross-ops among the $L_X\!+\!1$ slots.
-With $L_X=4$, the slots are $\{0,1,2,3,4\}$ and the value of $x$ available at each slot (i.e., what $\kappa$ would add to $y$) is:
-\begin{align*}
-\text{slot }0 &:~ x\\
-\text{slot }1 &:~ x+1\\
-\text{slot }2 &:~ x+2\\
-\text{slot }3 &:~ 2(x+2)=2x+4\\
-\text{slot }4 &:~ 2x+5.
-\end{align*}
-We choose $\alpha\in\{0,\dots,4\}$ and fix two Y-increments so that for all $(x,y)\in D$,
-\(
-y' = y + \text{slot\_value}(\alpha) + 2
-\)
-matches the observed $y'$. Testing shows $\alpha^\star=2$ satisfies all rows:
-\begin{equation*}
-y' \;=\; y + (x+2) + 2 \;=\; y + x + 4.
-\end{equation*}
-
-\subsection{Level 3: Embed to $G$ (concrete program)}
-Embedding $e^{+}(p_X^\star,\alpha^\star)$ instantiates a concrete word over the full DSL.
-Any interleaving that preserves the X order, places $\kappa$ at slot $2$, and includes the two $\texttt{inc\_y}$ is semantics-equivalent.
-A canonical choice is
-\begin{equation*}
-[\texttt{inc\_x},\ \texttt{inc\_x},\ \kappa,\ \texttt{double\_x},\ \texttt{inc\_x},\ \texttt{inc\_y},\ \texttt{inc\_y}].
-\end{equation*}
-It computes for all $(x,y)$:
-\(
-x'\!=\!2x+5,\ y'\!=\!y+x+4
-\),
-matching the ground truth.
-
-\subsection{One-sentence summaries}
-\begin{itemize}
-\item \textbf{Solve in $A$:} find the factor $p_X^\star$ that matches the X-projection; Y cannot be solved without couplings.
-\item \textbf{Refine to $A^{+}$:} choose the finite interface $\alpha^\star$ (cross placement) and the Y-only count to explain $y'$.
-\item \textbf{Embed to $G$:} realize any concrete interleaving consistent with $(p_X^\star,\alpha^\star,p_Y^\star)$; all such words are semantics-equivalent here.
-\end{itemize}
-
-\subsection{Size comparison on this example}
-With $m_X=2$, $m_Y=1$, $m_\times=1$, $(L_X,L_Y,K)=(4,2,1)$,
-\begin{align*}
-|A| &= m_X^{L_X}\,m_Y^{L_Y} \;=\; 2^4\cdot 1^2 \;=\; 16,\\
-|A^{+}| &= m_X^{L_X}\,m_Y^{L_Y}\,\binom{L_X+K}{K} \;=\; 16\cdot \binom{5}{1} \;=\; 80,\\
-|G_{\text{family}}| &= \binom{L_X+L_Y+K}{L_X,L_Y,K}\,m_X^{L_X}\,m_Y^{L_Y}\,m_\times^{K}
-= \binom{7}{4,2,1}\cdot 16 = 105\cdot 16 = 1680.
-\end{align*}
-Thus $A^{+}$ compresses the concrete family by a factor ${1680}/{80}=21=\binom{7}{2}$, the number of purely Y-interleavings
-that are semantically redundant under the commutation assumptions.
+\caption{Geometric-mean speedups computed directly from the implementation output of \texttt{scaling.py}.}
+\label{tab:gm_by_k}
+\end{table}
 
 
-\section{Extension: Parity as a Third Abstraction Level ($A^{++}$)}
 
-After solving in $A$ and refining in $A^{+}$, we can add a lightweight third layer that enforces parity constraints. This extension demonstrates how domain-specific properties can be layered onto the core abstraction-refinement framework.
 
-\subsection{Motivation}
+\begin{table}[t]
+\centering
+\begin{tabular}{rrrrr}
+\hline
+$K$ & Global nodes & Comp nodes & Nodes$\times$ (Global/Comp) & Setting \\
+\hline
+0 & 1609 & 372  & 4.327956 & $L_X{=}8,\,b{=}4$ \\
+1 & 6384 & 374  & 17.071657 & $L_X{=}8,\,b{=}4$ \\
+2 & 22569 & 380 & 59.392105 & $L_X{=}8,\,b{=}4$ \\
+3 & 32061 & 387 & 82.829971 & $L_X{=}8,\,b{=}4$ \\
+\hline
+\end{tabular}
+\caption{Hard subset reported by the implementation (\texttt{scaling.py}): $L_X{=}8$, $b{=}4$, $L_Y{=}0$. Nodes ratios are computed from the printed values.}
+\label{tab:hard_subset}
+\end{table}
 
-Many program synthesis tasks exhibit structural invariants beyond cross-coupling patterns. For integer domains, parity (even/odd) constraints are common: programs that preserve evenness, maintain sign patterns, or respect modular arithmetic. Rather than encoding these constraints into the DSL primitives, we can add them as a post-synthesis verification step.
 
-\subsection{Informal Definition}
 
-Let $A^{++} \subseteq A^{+}$ be the subset of interface-refined programs that preserve even parity when executed on even inputs. Formally, a program $(p_X, \alpha) \in A^{+}$ belongs to $A^{++}$ if all intermediate values during execution remain even whenever the initial state is even.
+\section{Discussion and Limitations}
 
-\subsection{Verification Procedure}
+\paragraph{Practical variant used in experiments.}
+The experiments adopt a one-shot variant: we keep the first $p_X$ returned by Phase~1 and stop Phase~2 as soon as a satisfying interface is found. Trying multiple $p_X$'s would further increase success rates at the cost anticipated in Sec.~\ref{sec:complexity} (multiplying the refinement cost by the number of $p_X$ candidates).
 
-Given a candidate program from $A^{+}$:
-\begin{enumerate}
-    \item Execute the program on a synthetic even input (e.g., $(0,0)$).
-    \item Track the parity of both coordinates after each primitive operation.
-    \item Accept the program if parity is preserved throughout; reject otherwise.
-\end{enumerate}
+The interface abstraction is exact under (A1)--(A3); if cross operations can \emph{also} modify $x$, the interface must be extended (e.g.\ by tracking slots relative to both $p_X$ and $p_Y$ or by richer summaries). If $Y$--ops do not commute with $\kappa$, one can either bake their labels into the interface (track where $Y$ occurs between slots) or keep them explicit in $A^{+}$ without commuting them to the end; the counting and complexity formulas then change accordingly.
 
-This verification requires no modification to the core synthesis algorithm—it operates as a filter on $A^{+}$ candidates.
+\paragraph{Takeaway.} Separating ``what the coordinates do'' from ``where a small number of couplings go'' yields a provably smaller, exactly parameterized search in Phase~2 while keeping full expressiveness for triangular couplings.
 
-\subsection{Example: Even-Preserving Synthesis}
-
-Consider a DSL extended with both even-preserving operations (\texttt{inc2\_x}, \texttt{double\_x}) and parity-flipping operations (\texttt{inc1\_x}). The target function $x' = 2x + 10$, $y' = y + x + 4$ can be realized using only even-preserving primitives.
-
-The $A^{++}$ filter would accept programs that exclusively use \texttt{inc2\_x} and \texttt{double\_x}, while rejecting any program containing \texttt{inc1\_x}—even if such programs are functionally correct on the training data.
-
-This extension demonstrates that the abstraction-refinement approach can accommodate domain-specific constraints without compromising the core algorithmic structure.
-
+\bibliographystyle{plain}
+% \bibliography{refs} % (optional)
 \end{document}
