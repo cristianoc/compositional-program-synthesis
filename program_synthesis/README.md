@@ -31,4 +31,4 @@ The approach uses two abstraction levels:
 1. **A (Cross-free factorization)**: Solve coordinates independently, ignoring cross-operations
 2. **A⁺ (Interface refinement)**: Add minimal cross-operation interfaces to restore necessary couplings
 
-This achieves 7-60× fewer explored nodes and 8-180× speedup over global search methods.
+This achieves 4-59× fewer explored nodes and 8-184× speedup over global search methods.
