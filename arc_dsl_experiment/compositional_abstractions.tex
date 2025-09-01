@@ -2,6 +2,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage{amsmath,amsfonts,amssymb}
+\usepackage{amsthm}
 \usepackage{geometry}
 \usepackage{listings}
 \usepackage{xcolor}
@@ -26,7 +27,9 @@
 \newunicodechar{→}{\ensuremath{\rightarrow}}
 \newunicodechar{−}{\ensuremath{-}}
 \newunicodechar{≈}{\ensuremath{\approx}}
-\newunicodechar{•}{\ensuremath{\bullet}}
+\newunicodechar{•}{\ensuremath{\bullet}
+\newunicodechar{×}{\ensuremath{\times}}
+}
 
 % Custom commands
 \newcommand{\code}[1]{\texttt{#1}}
@@ -71,24 +74,38 @@ We use small grids where the target action can be stated compactly: \textbf{sele
 
 We spell out the two building blocks and how they eliminate symmetry.
 
+
 \subsection{A1: Palette canonicalization}
 
-$\alpha_1$: relabel non-zero colors by \textbf{decreasing frequency}, breaking ties by the \textbf{smaller original color id}. Background \code{0} is preserved. Returns \code{(x\_hat, meta)} with \code{meta = \{"orig\_for\_can": ..., "can\_for\_orig": ...\}}.
+$\alpha_1$ canonicalizes the nonzero palette by relabeling colors to $\{1,\dots,k\}$ (background stays $0$) using a deterministic, permutation-invariant total order:
+\begin{enumerate}
+\item Sort colors by \emph{descending frequency} in the grid.
+\item Break ties by the \emph{lexicographic first occurrence} coordinate $(r,c)$ of each color.
+\item If still tied (pathological), break ties by the lexicographic order of the color's binary mask string over the grid.
+\end{enumerate}
+Write $C_1:X\to X$ for the relabeling map and let the gauge store the bijection between original and canonical ids, \code{meta = \{``orig\_for\_can'': \dots, ``can\_for\_orig'': \dots\}}.
 
 \begin{itemize}
-\item \textbf{Invariant.} No forbidding constraints beyond keeping background \code{0} intact.
-\item \textbf{Gauge.} A bidirectional palette map (original↔canonical) to transfer predictions back to the original ids.
-\item \textbf{Why.} Quotients out \textbf{palette symmetry}, making statements like ``least-frequent color'' well-defined in every instance.
+\item \textbf{Invariant.} Background $0$ is fixed; geometry is unchanged.
+\item \textbf{Gauge.} A bidirectional palette map (original$\leftrightarrow$canonical) to transfer predictions back.
+\item \textbf{Why.} Quotients out \textbf{palette symmetry} so descriptors like ``least-frequent color'' are well-defined.
 \end{itemize}
+
 
 \subsection{A2: Canonical object order (on top of A1)}
 
-$\alpha_2$: sort connected components by the tuple $(area, top, left, color)$ after A1.
+After applying A1, let $\mathcal{C}(x)$ be the set of \textbf{4-connected} non-background components. For each component $C$, define
+$\mathrm{topleft}(C)=\min_{\mathrm{lex}}\{(r,c)\in C\}$ (lexicographic min of its cells) and $\mathrm{area}(C)=|C|$.
+Define a total order on components by the tuple
+\[
+(\mathrm{area}(C),~\mathrm{topleft}_r(C),~\mathrm{topleft}_c(C),~\mathrm{color}(C)).
+\]
+Let $C_2$ attach the sorted-index metadata (without changing pixels). The gauge records the permutation between arbitrary ids and this canonical order.
 
 \begin{itemize}
-\item \textbf{Invariant.} Metadata-only; does not constrain geometry beyond the ordering.
-\item \textbf{Gauge.} The canonical order list to transfer ``index-based'' references back to concrete component ids.
-\item \textbf{Why.} Quotients out \textbf{object-enumeration symmetry} so that ``component index 0'' has a stable meaning even in tie situations.
+\item \textbf{Invariant.} Pure metadata; does not constrain geometry beyond ordering.
+\item \textbf{Gauge.} A permutation mapping arbitrary component ids to canonical indices (and back).
+\item \textbf{Why.} Removes \textbf{component-enumeration symmetry} so rules like ``smallest object'' are unambiguous.
 \end{itemize}
 
 \subsection{Mapping existence (search-free)}
@@ -133,12 +150,12 @@ We use three nested spaces, each reusing the same \textbf{action family} (select
 
 Across all spaces, the mapping family is identical; only the \textbf{symmetry multiplicity} changes.
 
+
 \subsection{Concrete worked examples (aligned with \code{arc\_abstraction\_dsl\_2.py})}
 
 \subsubsection{Concrete example: A1 palette canonicalization}
 
-Original grid (colors: 0=background, 2,3,5):
-
+Original grid (0=background; nonzero colors are 2,3,5):
 \begin{lstlisting}
 0 0 2 2 0 0
 0 3 3 0 0 0
@@ -146,76 +163,34 @@ Original grid (colors: 0=background, 2,3,5):
 0 0 0 0 5 0
 \end{lstlisting}
 
-Non-zero histogram: 3→3, 5→3, 2→2.  
-Canonical relabel (descending frequency, ties by \textbf{smaller original id}): 3→1, 5→2, 2→3.
+Non-zero histogram: 3→3, 5→3, 2→2.\\
+A1 tie-break: first occurrence (row, col). First(3)=(1,1), First(5)=(2,4) so 3 < 5.\\
+Canonical relabel: 3→1, 5→2, 2→3.
 
-Canonicalized grid \code{x\_hat} and meta:
-
+Canonicalized grid $x_{\hat{}}$ and meta:
 \begin{lstlisting}
-1 1 1 0 0 0
-1 1 0 0 2 2
-0 0 0 0 0 0
-0 0 0 2 2 2
-0 0 0 0 0 1
+0 0 3 3 0 0
+0 1 1 0 0 0
+0 1 0 0 2 2
+0 0 0 0 2 0
 \end{lstlisting}
-
-\code{meta.orig\_for\_can = \{1: 3, 2: 5, 3: 2\}}  
-\code{meta.can\_for\_orig = \{3: 1, 5: 2, 2: 3\}}
+\code{meta.orig\_for\_can = \{1:3, 2:5, 3:2\}}
 
 \subsubsection{Concrete example: A2 canonical object order}
-
-Connected components in \code{x\_hat} above, summarized as $(area, (top,left), color)$:
-
-\begin{itemize}
-\item (2, (0, 2), 3)
-\item (3, (1, 1), 1)
-\item (3, (2, 4), 2)
-\end{itemize}
-
-A2 orders them by $(area, top, left, color)$, so \textbf{index 0} is the $(2, (0,2), 3)$ component.
+Components of $x_{\hat{}}$ (area, topleft, color):
+(2,(0,2),3), (2,(2,4),2), (3,(1,1),1).\\
+Sorting by (area, topleft) gives \code{index0} = (2,(0,2),3).
 
 \subsubsection{End-to-end example: A1→A2 + recolor + gauge back}
 
-Input $x$ (original palette):
-
+Selector: \code{sel\_comp\_smallest\_canonical($x_{\hat{}}$)} → the smallest-area component (index0).\\
+Color rule (present-only least-frequent): color 3 (count 2).\\
+Apply \code{recolor\_component($x_{\hat{}}$, index0, color=3)} (no-op here), then gauge back with \{1→3, 2→5, 3→2\}:
 \begin{lstlisting}
-7 7 7 0 0 0
-7 7 0 0 2 2
-0 0 0 0 0 0
-0 0 0 3 3 3
-0 0 0 0 0 7
-\end{lstlisting}
-
-After A1 canonicalization (\code{x\_hat}):
-
-\begin{lstlisting}
-1 1 1 0 0 0
-1 1 0 0 3 3
-0 0 0 0 0 0
-0 0 0 2 2 2
-0 0 0 0 0 1
-\end{lstlisting}
-
-Selector: \code{sel\_comp\_smallest\_canonical(x\_hat)} → the single-pixel component (area=1).  
-Color rule: \code{sel\_color\_argmin\_hist(x\_hat)} → choose the \textbf{least-frequent} canonical color = 3.  
-Apply \code{recolor\_component(x\_hat, comp, 3)}:
-
-\begin{lstlisting}
-1 1 1 0 0 0
-1 1 0 0 3 3
-0 0 0 0 0 0
-0 0 0 2 2 2
-0 0 0 0 0 3
-\end{lstlisting}
-
-Gauge back to original palette using \code{meta.orig\_for\_can} (1→7, 2→3, 3→2):
-
-\begin{lstlisting}
-7 7 7 0 0 0
-7 7 0 0 2 2
-0 0 0 0 0 0
-0 0 0 3 3 3
-0 0 0 0 0 2
+0 0 2 2 0 0
+0 3 3 0 0 0
+0 3 0 0 5 5
+0 0 0 0 5 0
 \end{lstlisting}
 
 \section{Algorithm (sketch)}
@@ -265,11 +240,33 @@ These match the qualitative trend reported earlier (in a single-dataset summary)
 \subsection{Read-off improvements from the local run}
 
 \begin{itemize}
-\item \textbf{Program count shrinks:} G→A1: 2404→172 (\textbf{−92.85\%}); A1→A1→A2: 172→2 (\textbf{−98.84\%}). Overall G→A1→A2: \textbf{−99.917\%} (2404→2).
-\item \textbf{Runtime collapses:} 3.884s→0.197s (\textbf{×19.7 faster}), then 0.197s→0.028s (\textbf{×7.0 faster}). Overall: \textbf{×138.7 faster} (3.884s→0.028s).
-\item \textbf{Effort to first solution:} \code{avg\_tries\_to\_success} is \textbf{1.0} in A1→A2 (immediate), \textbf{5.41} in G (moderate), and \textbf{35.57} in A1 (smaller space but \textbf{noisier} due to tie-break variants); composition with A2 removes that ambiguity.
-\item \textbf{Validity rates:} A1→A2: \textbf{2/2} (100\%); A1: \textbf{4/172 ≈ 2.3\%}; G: \textbf{441/2404 ≈ 18.3\%}.
+\item \textbf{Program count shrinks:} G→A1: 2404→172 (\textbf{−92.85\%}); A1→A2: 172→2 (\textbf{−98.84\%}). Overall G→A1→A2: \textbf{−99.917\%} (2404→2).
+\item \textbf{Runtime collapses:} 3.884s→0.197s (\textbf{×19.7 faster}); 0.197s→0.028s (\textbf{×7.0 faster}). Overall: \textbf{×138.7 faster} (3.884s→0.028s).
+\item \textbf{Effort to first solution:} \code{avg\_tries\_to\_success} is \textbf{1.0} in A1→A2 (deterministic selection/order); in A1 it is 35.573 (sensitive to tie-break variants); composition with A2 removes that ambiguity.
+\item \textbf{Validity rates:} A1→A2: \textbf{2/2 (100\%)}; A1: \textbf{4/172 (≈ 2.3\%)}; G: \textbf{441/2404 (≈ 18.3\%)}.
 \end{itemize}
+
+\section{Properties and Proof Sketches}
+
+We record the key algebraic properties that make $C_2\!\circ C_1$ a robust quotient.
+
+\paragraph{A1 invariance to palette relabeling.}
+For any permutation $\pi$ of nonzero labels, $C_1(\pi\!\cdot\!x)=C_1(x)$. Frequencies and first-occurrence coordinates depend only on the \emph{support} of each color, not its id.
+
+\paragraph{A1 idempotence.}
+$C_1(C_1(x))=C_1(x)$, since the induced order is already satisfied.
+
+\paragraph{A2 totality and determinism.}
+With 4-connectedness and $\mathrm{topleft}$ defined as the lexicographic minimum cell, two distinct components cannot share the same tuple $(\mathrm{area},\mathrm{topleft}_r,\mathrm{topleft}_c)$; thus the order is total and deterministic.
+
+\paragraph{Compositional invariance and idempotence.}
+$C_2(C_1(\pi\!\cdot\!x))=C_2(C_1(x))$ for any palette permutation $\pi$, and $C_2(C_2(\cdot))=C_2(\cdot)$.
+
+\paragraph{Gauge correctness.}
+The palette map in $C_1$ and the component-order permutation in $C_2$ are bijections; applying their inverses transfers predictions back to the original instance without loss.
+
+\paragraph{Recolor commutes with palette permutations.}
+For any palette permutation $P$, \(\;P(\mathrm{recolor}(x,k))=\mathrm{recolor}(P(x),P(k))\). This enables search in the abstract space and faithful transfer via gauges.
 
 \section{Interpretation}
 
