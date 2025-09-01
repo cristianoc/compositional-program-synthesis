@@ -33,20 +33,63 @@ def color_hist_nonzero(g):
     return {int(ui): int(ci) for ui,ci in zip(u,c)}
 
 def canonical_component_key(comp):
-    return (comp["area"], comp["bbox"][0], comp["bbox"][1], comp["color"])
+    return (comp['area'], comp['bbox'][0], comp['bbox'][1], comp['color'])
 
 def alpha1_palette(g):
-    hist = color_hist_nonzero(g)
-    order = sorted(hist.items(), key=lambda kv: (-kv[1], kv[0]))
-    can_for_orig = {}; orig_for_can = {}
-    k=1
-    for orig,_ in order:
-        can_for_orig[orig]=k; orig_for_can[k]=orig; k+=1
+    """
+    A1 palette canonicalization: relabel nonzero colors by
+      (1) descending frequency,
+      (2) tie → lexicographic first occurrence (row, col),
+      (3) tie → lexicographic order of the color's binary mask string (row-major).
+    Background 0 is fixed. Returns (x_hat, meta) where meta has
+    "orig_for_can" and "can_for_orig" bijections.
+    """
+    H, W = g.shape
+    hist = color_hist_nonzero(g)  # {color: count}, excludes 0
+    if not hist:
+        # nothing to do
+        return g.copy(), {"orig_for_can": {}, "can_for_orig": {}}
+
+    # First occurrence (row, col) per color (row-major scan)
+    first = {}
+    for r in range(H):
+        for c in range(W):
+            v = int(g[r, c])
+            if v == 0:
+                continue
+            if v not in first:
+                first[v] = (r, c)
+
+    # Binary mask string per color (row-major)
+    masks = {}
+    # To avoid quadratic work, we build masks in one pass
+    # by appending to lists, then join once.
+    masks_lists = {v: [] for v in hist.keys()}
+    for r in range(H):
+        for c in range(W):
+            v = int(g[r, c])
+            for col in hist.keys():
+                masks_lists[col].append('1' if col == v else '0')
+    for col, lst in masks_lists.items():
+        masks[col] = ''.join(lst)
+
+    # Sort colors by the invariant total order
+    colors = list(hist.keys())
+    colors.sort(key=lambda col: (-hist[col], first[col], masks[col]))
+
+    can_for_orig = {}
+    orig_for_can = {}
+    for k, orig in enumerate(colors, start=1):
+        can_for_orig[orig] = k
+        orig_for_can[k] = orig
+
+    # Relabel grid, keeping background 0
     x_hat = np.zeros_like(g)
-    for r in range(g.shape[0]):
-        for c in range(g.shape[1]):
-            v = int(g[r,c])
-            x_hat[r,c] = 0 if v==0 else can_for_orig[v]
+    for r in range(H):
+        for c in range(W):
+            v = int(g[r, c])
+            x_hat[r, c] = 0 if v == 0 else can_for_orig[v]
+
     return x_hat, {"orig_for_can": orig_for_can, "can_for_orig": can_for_orig}
 
 def remap_with_can_for_orig(g, can_for_orig: Dict[int,int]):
