@@ -24,6 +24,28 @@ Starting from a concrete problem domain **G** (grids, programs, structured data)
 
 ---
 
+### Results
+
+Two toy instantiations show meaningful speedups:
+
+#### 1. ARC-AGI Grid Puzzles
+Eliminates symmetries in grid puzzles through two abstraction levels:
+- **A1**: Palette canonicalization (quotient out color symmetries)
+- **A2**: Object ordering canonicalization (quotient out enumeration symmetries)
+
+**Result**: 2404→2 programs (-99.917%), 138× speedup.
+
+#### 2. Inductive Programming (Flash Fill style)
+Two-phase approach for program synthesis on product domains:
+- **Phase 1**: Cross-free factorization (solve coordinates independently) 
+- **Phase 2**: Interface refinement (add minimal cross-operation coupling)
+
+**Result**: 4-59× fewer nodes, 8-184× speedup over global search.
+
+These results suggest the approach is worth exploring further.
+
+---
+
 ### Background & baseline
 - **Task:** given a few input/output example pairs `(x_i, y_i)` and a test input `x_test`, synthesize a program that produces the test output `y_test`.  
 - **Non-compositional baseline:** search for a function `f: G → G` (via enumerative DSL, constraints, LLM-guided search, or neural edit policies) such that `f(x_i) = y_i` for all training examples, then apply `f(x_test)`.
@@ -52,21 +74,19 @@ How to **obtain** abstractions is intentionally left open. This README defines t
 
 ---
 
-### Examples of abstractions `A` and embeddings `e`  *(illustrative only)*
-These illustrate the interface `(A, e, mappings)`; they are **not** a prescribed library.
+### Examples
 
-**Grid-based domains:**
-- **Palette reduction:** a color never appears → `A` is `G` without that color; `e` is identity on remaining colors.  
-- **Object graph:** `A` contains connected components and relations (adjacency, symmetry); `e` renders objects to pixels.  
-- **Downsampling / tiling:** `A` compresses blocks (e.g., 2×2→1×1) with an invertible render back to `G`.  
-- **Symmetry quotienting:** factor out rotations/reflections; `e` re-applies a canonical pose.  
+**Grid puzzles:**
+- **Missing color**: detect unused color → drop it in `A` → solve in smaller palette → embed back
+- **Object symmetry**: factor out rotation/reflection → reason over object graphs → render with canonical pose
+- **Downsampling**: compress blocks (2×2→1×1) → synthesize macro logic → upsample back
 
-**Other domains:**
-- **Type abstraction:** ignore specific data types → `A` works with shape/structure; `e` instantiates with concrete types.
-- **Syntax simplification:** abstract away syntactic sugar → `A` uses core constructs; `e` expands to full syntax.
-- **Scale abstraction:** ignore specific numeric values → `A` works with relative relationships; `e` applies concrete scaling.
+**Programming:**
+- **Type abstraction**: ignore data types → work with shape/structure → instantiate concrete types
+- **Cross-operation factorization**: solve coordinates independently → add minimal coupling → full program
+- **String processing**: factor out character-level ops → reason over tokens → expand to characters
 
-Abstractions can be **parametric** (which element, which transformation, etc.) and **composed**.
+Abstractions can be parametric and composed into hierarchies.
 
 ---
 
@@ -161,37 +181,3 @@ compositional-program-synthesis/
     speedup_vs_k.png              # visualization: speedup analysis
     README.md                     # documentation for synthesis experiments
 ```
-
----
-
-### Toy Instantiations
-
-Two toy instantiations have been tested, showing meaningful speedups:
-
-#### 1. ARC-AGI Grid Puzzles (`arc_dsl_experiment/`)
-Eliminates symmetries in grid puzzles through two abstraction levels:
-- **A1**: Palette canonicalization (quotient out color symmetries)
-- **A2**: Object ordering canonicalization (quotient out enumeration symmetries)
-
-**Result**: 2404→2 programs (-99.917%), 138× speedup.
-
-#### 2. Inductive Programming (Flash Fill style) (`program_synthesis/`)
-Two-phase approach for program synthesis on product domains:
-- **Phase 1**: Cross-free factorization (solve coordinates independently) 
-- **Phase 2**: Interface refinement (add minimal cross-operation coupling)
-
-**Result**: 4-59× fewer nodes, 8-184× speedup over global search.
-
-These results suggest the approach is worth exploring further.
-
----
-
-### Examples (intuition only)
-**Grid-based domains:**
-- Missing color: detect unused color → drop it in `A` → solve in smaller palette → embed back (identity on remaining colors).  
-- Object duplication with symmetry: factor out rotation in `A`, reason over object graphs, then render with chosen pose.  
-- Blockwise scaling: downsample to detect macro-pattern, synthesize macro logic, upsample back.
-
-**Other synthesis domains:**
-- String manipulation: factor out character-level operations → reason over token/word abstractions → expand back to characters.
-- List processing: abstract over specific data types → synthesize shape-preserving operations → instantiate with concrete types.
