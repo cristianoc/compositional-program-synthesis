@@ -102,7 +102,7 @@ Edges represent further abstraction `A → A₂` or refinement choices (e.g., sy
 
 #### Evidence & scoring
 - **Training consistency:** how well the abstract hypothesis explains `(x_i, y_i)` after embedding.  
-- **Compression / MDL:** shorter descriptions of `A`, `e`, and `f_A` score higher.  
+- **Compression / MDL:** shorter descriptions of `A`, `e`, and `S_A` score higher.  
 - **Stability checks:** invariants (counts, symmetries) preserved across examples.  
 - **Robustness:** small perturbations don't break the mapping.  
 - **Prior:** prefer lower-capacity abstractions first.
