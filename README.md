@@ -1,21 +1,26 @@
-## Compositional Reasoning via Abstraction–Refinement for Program Synthesis
+## Compositional Program Synthesis via Abstraction–Refinement
 
-> A framework for program synthesis from examples using compositional abstractions and refinement. Includes two concrete instantiations: DSL symmetry elimination and exact interface abstraction for product domains.
+> A new take on compositional program synthesis: repeatedly solve simpler abstractions of the task, then refine back to concrete domains. Think CEGAR but for program synthesis from examples. Two toy instantiations on ARC-AGI and inductive programming show meaningful speedups.
 
 ### Why
-Program synthesis from examples often attacks the whole task at once, searching a huge space of possible programs whose cost grows (often exponentially) with problem complexity. This project explores **compositional reasoning**: repeatedly solve a **simpler abstraction** of the task, then **refine** back to the concrete problem domain.  
-Primary application domains: **grid-based puzzles** (including ARC-AGI) and **structured synthesis tasks**.
+**Goal:** Use composable abstractions to obtain exponential reduction of the state space.
+
+**Key insight:** Instead of attacking the whole search space at once, lift problems to abstract domains, solve there, then embed back. Branching + voting handles abstraction failures.
+
+**Domains:** ARC-AGI grid puzzles and inductive programming.
 
 ---
 
-### TL;DR (approach)
-1. Start from a concrete problem domain **G** (e.g., grids, programs, structured data).  
-2. Lift to an abstract domain **A** with an embedding `e: A → G` and a mapping of examples from **G** to **A**.  
-3. Solve the problem in **A**; map the solution back to **G** via `e`.  
-4. Refine recursively `A → A₂ → …`, forming a tree of abstraction refinements.  
-5. Score evidence that an abstraction is correct; branch and vote/select across plausible refinements to hedge against mistakes.
+### How it works
+Starting from a concrete problem domain **G** (grids, programs, structured data):
 
-**Intuition:** repeated correct abstractions can shrink effective search exponentially; branching provides recovery when an abstraction is wrong.
+1. **Lift** problems to abstract domains **A** with embedding `e: A → G`  
+2. **Solve** in the simpler abstract space  
+3. **Embed** back to concrete domain **G** via `e`  
+4. **Refine** recursively `A → A₂ → …` when needed  
+5. **Branch + vote** across abstraction hypotheses to handle failures
+
+**Result:** Exponential search space reduction when abstractions are good; graceful recovery when they fail.
 
 ---
 
@@ -122,22 +127,12 @@ This document deliberately leaves the proposal mechanism unspecified. In the env
 ---
 
 ### Context & related work
-This project touches several neighboring lines of work; we aim to interoperate with (not replace) them. Importantly, we avoid committing to a fixed abstraction library and instead emphasize instance-wise, test-time adaptation—aligning with trends in test-time compute and structured search.
 
-#### Program synthesis benchmarks and community
-- Many domains frame reasoning as generalization from few examples under domain-specific priors. Our setup follows this spirit (program search + abstraction) and is compatible with various synthesis harnesses.  
-- The abstraction–refinement layer is designed to sit above whichever concrete solver you use, making it applicable across different synthesis domains.
+**CEGAR connection:** Think CEGAR (Counter-Example Guided Abstraction Refinement) but for program synthesis from examples. Instead of counterexamples, we use evidence scores and branching + voting to handle abstraction failures.
 
-#### Abstraction–refinement & formal methods
-- Inspired by **CEGAR** in model checking: maintain a small abstract model and refine when evidence demands it.  
-- Difference here: program synthesis from examples lacks ground-truth counterexamples at test time, so we replace counterexamples with **evidence scores** and hedge via branching + voting.
+**Program synthesis:** Compatible with existing synthesis approaches—the abstraction layer sits above your concrete solver, whether that's enumerative search, constraints, or LLMs.
 
-#### Program synthesis & library learning
-- Enumerative/constraint-based synthesis and DSL design remain strong baselines; in this framing they operate **within `A`** once an abstraction is posited.  
-- Library learning (e.g., DreamCoder-style) may help, but is optional.
 
-#### Test-time compute & LLM reasoning
-- CoT/Self-Consistency, Tree/Graph/Program-of-Thoughts can be used **inside `A`**. The contribution here is to shape the state space before invoking these methods and to **score hypotheses** for compute allocation.
 
 ---
 
@@ -157,13 +152,11 @@ compositional-program-synthesis/
     challenging_metrics.txt         # human-readable metrics summary
     compositional_abstractions.tex  # LaTeX paper on compositional abstractions
     compositional_abstractions.pdf  # compiled paper
-    compositional_abstractions.{aux,log,out}  # LaTeX build artifacts
     README.md                       # documentation for DSL experiments
   program_synthesis/
     scaling.py                      # scaling analysis and performance evaluation
     compositional_synthesis.tex    # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
     compositional_synthesis.pdf    # compiled paper
-    compositional_synthesis.{aux,log,out}  # LaTeX build artifacts
     nodes_vs_k_scaling.png         # visualization: node count vs. parameter k
     speedup_vs_k.png              # visualization: speedup analysis
     README.md                     # documentation for synthesis experiments
@@ -171,28 +164,25 @@ compositional-program-synthesis/
 
 ---
 
-### Implemented Instantiations
+### Toy Instantiations
 
-Two concrete instantiations of the compositional reasoning approach have been developed and evaluated:
+Two toy instantiations have been tested, showing meaningful speedups:
 
-#### 1. DSL Compositional Abstractions (`arc_dsl_experiment/`)
-This instantiation implements compositional abstractions that eliminate symmetries in ARC-style grid puzzles through two levels:
-- **A1 (Palette canonicalization)**: Relabels non-zero colors by decreasing frequency to quotient out palette symmetry
-- **A2 (Canonical object order)**: Sorts connected components by (area, top, left, color) to quotient out object-enumeration symmetry
+#### 1. ARC-AGI Grid Puzzles (`arc_dsl_experiment/`)
+Eliminates symmetries in grid puzzles through two abstraction levels:
+- **A1**: Palette canonicalization (quotient out color symmetries)
+- **A2**: Object ordering canonicalization (quotient out enumeration symmetries)
 
-**Results**: Achieves dramatic search space reduction from 2404→2 programs (-99.917%) with 138× speedup, demonstrating near-zero search cost with 100% validity rate on the composed abstractions.
+**Result**: 2404→2 programs (-99.917%), 138× speedup.
 
-#### 2. Compositional Synthesis via Exact Interface Abstraction (`program_synthesis/`)
-This instantiation implements a two-phase approach for program synthesis on product domains (e.g., integer pairs):
+#### 2. Inductive Programming (Flash Fill style) (`program_synthesis/`)
+Two-phase approach for program synthesis on product domains:
+- **Phase 1**: Cross-free factorization (solve coordinates independently) 
+- **Phase 2**: Interface refinement (add minimal cross-operation coupling)
 
-- **Phase 1 (Cross-free factorization)**: Solve coordinates independently in abstract space `A`, ignoring cross-operations
-- **Phase 2 (Interface refinement)**: Enumerate exact interface `A⁺` specifying where fixed number of cross-operations are inserted relative to X-program
+**Result**: 4-59× fewer nodes, 8-184× speedup over global search.
 
-The approach targets DSLs with triangular coupling (cross-operations read X but only modify Y), uses precise mathematical foundations with commutation assumptions, and includes a parity-aware extension (`A⁺⁺`) as an optional third layer.
-
-**Results**: Achieves 4-59× fewer explored nodes (geometric mean) and 8-184× speedup over global search, with identical accuracy. The mathematical framework is exact under stated assumptions.
-
-Both implementations provide concrete evidence that the abstraction-refinement framework can yield substantial computational advantages while maintaining solution quality.
+These results suggest the approach is worth exploring further.
 
 ---
 
