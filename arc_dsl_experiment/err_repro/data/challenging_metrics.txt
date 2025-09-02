@@ -1,0 +1,1 @@
+=== Challenging Single-Dataset Metrics (G → A1 → A1→A2, fixed A1 gauge, protected singles) ===\n[G] total_candidates=2404  num_valid=441  avg_tries_to_success=5.405  wall_time_s=9.901\n[A1] total_candidates=172  num_valid=4  avg_tries_to_success=35.57333333333333  wall_time_s=0.695\n[A1→A2] total_candidates=2  num_valid=2  avg_tries_to_success=1.0  wall_time_s=0.082
