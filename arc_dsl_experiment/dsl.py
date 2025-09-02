@@ -220,6 +220,9 @@ def recolor_component(g, comp, new_color):
         y[r,c] = new_color
     return y
 
+def rotate_90(g):
+    return np.rot90(g, k=-1)
+
 def preop_identity(g): return g
 
 def make_preop_color_perm(perm_map: Dict[int,int]):
@@ -401,5 +404,66 @@ def run():
     with open("challenging_metrics.json","w",encoding="utf-8") as f:
         json.dump({"G":resG,"A1":resA1,"A1->A2":resA12}, f, indent=2)
 
+def example_recolor_rotate():
+    """
+    Example showing invariant: output grid is one object from input grid, recolored and rotated.
+    
+    Invariant representation:
+    1. Select object using canonical ordering (smallest by area→top→left→color)
+    2. Recolor to target color (e.g., max color ID or min frequency color)  
+    3. Apply 90-degree rotation
+    4. Output is the transformed grid
+    """
+    # Create example input: 4x4 grid with two objects
+    x = np.array([
+        [0, 1, 0, 2],
+        [0, 1, 0, 2], 
+        [0, 0, 0, 0],
+        [3, 3, 3, 0]
+    ])
+    
+    print("Input grid:")
+    print(x)
+    print()
+    
+    # Apply A1 abstraction (palette canonicalization)
+    x_a1, meta = alpha1_palette(x)
+    print("After A1 (palette canonicalization):")
+    print(x_a1)
+    print(f"Color mapping: {meta['can_for_orig']}")
+    print()
+    
+    # Apply A2 abstraction (object ordering)  
+    x_a12, obj_meta = alpha2_objorder(x_a1)
+    print("After A2 (object ordering):")
+    print("Objects in canonical order:", [f"area={c['area']}, color={c['color']}" for c in obj_meta['order']])
+    print()
+    
+    # Select object (smallest canonical)
+    selected_obj = sel_comp_smallest_canonical(x_a12)
+    print(f"Selected object: area={selected_obj['area']}, color={selected_obj['color']}")
+    print()
+    
+    # Recolor to target (max color ID)
+    target_color = sel_color_max_id(x_a12)
+    y_recolored = recolor_component(x_a12, selected_obj, target_color)
+    print(f"After recoloring to target color {target_color}:")
+    print(y_recolored)
+    print()
+    
+    # Apply rotation
+    y_rotated = rotate_90(y_recolored)
+    print("After 90-degree rotation (final output):")
+    print(y_rotated)
+    print()
+    
+    # Convert back to original color space
+    y_final = remap_with_can_for_orig(y_rotated, meta['orig_for_can'])
+    print("Mapped back to original colors:")
+    print(y_final)
+
 if __name__=="__main__":
+    print("=== Example: Recolor and Rotate Invariant ===")
+    example_recolor_rotate()
+    print("\n" + "="*50 + "\n")
     run()

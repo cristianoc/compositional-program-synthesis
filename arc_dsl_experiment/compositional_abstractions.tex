@@ -193,6 +193,47 @@ Apply \code{recolor\_component($x_{\hat{}}$, index0, color=3)} (no-op here), the
 0 0 0 0 5 0
 \end{lstlisting}
 
+\subsubsection{Extended example: Recolor and rotate invariant}
+
+Another common ARC pattern is selecting one object from the input, recoloring it, and applying a geometric transformation like rotation. We demonstrate this with a 4×4 example:
+
+Original input grid:
+\begin{lstlisting}
+0 1 0 2
+0 1 0 2
+0 0 0 0
+3 3 3 0
+\end{lstlisting}
+
+After A1 palette canonicalization (frequency order: 3→1, 1→2, 2→3):
+\begin{lstlisting}
+0 2 0 3
+0 2 0 3
+0 0 0 0
+1 1 1 0
+\end{lstlisting}
+
+Component analysis (area, topleft, color): [(2,(0,1),2), (2,(0,3),3), (3,(3,0),1)]\\
+After sorting: smallest canonical object is area=2, color=2.
+
+Apply recolor to max color ID (3) and 90° rotation:
+\begin{lstlisting}
+1 0 0 0
+1 0 3 3
+1 0 0 0
+0 0 3 3
+\end{lstlisting}
+
+Final result (gauged back to original colors):
+\begin{lstlisting}
+3 0 0 0
+3 0 2 2
+3 0 0 0
+0 0 2 2
+\end{lstlisting}
+
+This demonstrates how the abstraction framework handles composite transformations (recolor + rotate) while maintaining canonical object selection and color rules.
+
 \section{Algorithm (sketch)}
 
 \begin{enumerate}
