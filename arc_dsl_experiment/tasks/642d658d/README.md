@@ -208,3 +208,34 @@ Overlay-driven salience, composed with a simple `UniformCrossPattern` predicate,
 - `max_radius = 1.4` (cap before rounding; ≈ 3×3 boxes when ≤ 1.5)
 - `context_pad = 2` (pixels around each box to estimate surround)
 
+## Reproducing results (overlay abstraction experiment)
+
+Requirements:
+- Python 3.10+ with `numpy`, `matplotlib` installed
+
+Steps:
+1. From this folder, install deps (no venv required):
+   ```bash
+   python3 -m pip install --user numpy matplotlib
+   ```
+2. Run the reproduction script:
+   ```bash
+   python3 repro.py
+   ```
+3. Expected outputs:
+   - Console:
+     - Node counts: `G core nodes: 1005`, `Overlay+predicate nodes: 201`
+     - Programs found in abstraction space: `identity`, `perm_192`
+     - Stats dict similar to: `{'G': {'nodes': 1005, 'programs_found': 0, ...}, 'ABS': {'nodes': 201, 'programs_found': 2, 'tries_to_first': 1, ...}}`
+   - Images under `images/`:
+     - `overlay_train_1.png`, `overlay_train_2.png`, `overlay_train_3.png`
+     - `overlay_test.png`
+
+Notes:
+- `repro.py` uses the local `dsl.py` and `task.json` in this directory.
+- Timings depend on hardware; node counts and found program strings should match.
+ - If you see an "externally-managed-environment" (PEP 668) error, either use a virtualenv, or rerun the install with:
+   ```bash
+   python3 -m pip install --user --break-system-packages numpy matplotlib
+   ```
+
