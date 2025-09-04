@@ -2,13 +2,13 @@
   "ABS": {
     "nodes": 201,
     "programs_found": 2,
-    "time_sec": 0.21527379198232666,
+    "time_sec": 0.21781950001604855,
     "tries_to_first": 1
   },
   "G": {
     "nodes": 1005,
     "programs_found": 0,
-    "time_sec": 0.23500858299667016,
+    "time_sec": 0.24033762500039302,
     "tries_to_first": null
   }
 }
