@@ -2,8 +2,8 @@
 # Overlay Abstraction Experiment Utilities
 # This module implements:
 #  • Overlay extractor: detect_bright_overlays  (README_clean.md §2.2, “Methods: Overlay extractor”)
-#  • Abstraction: BrightOverlayIdentity         (README_clean.md §2.3, identity + stored overlays)
-#  • Pattern predicate & predictor pipeline     (README_clean.md §2.3; §5 “Analysis”)
+#  • Abstraction: PatternOverlayExtractor       (pattern overlays + stored overlays)
+#  • Pattern predicate & predictor pipeline     (UniformPatternPredicate; §2.3; §5 “Analysis”)
 #  • G core color rules incl. local-structure   (README_clean.md §2.4 “Extensions to G”)
 #  • Program enumeration & pretty-print helpers (README_clean.md §4 “Results”)
 # For numeric defaults of the detector, see README_clean.md: “Detector defaults (for reproducibility)”.
@@ -13,10 +13,7 @@
 from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic
 import numpy as np
-from vision import (
-    grid_to_luminance as vision_grid_to_luminance,
-    detect_bright_overlays_absolute as vision_detect_bright_overlays,
-)
+from pattern import detect_pattern_overlays
 # ===================== Typed, compositional DSL =====================
 # Minimal typed-DSL scaffolding to make composition explicit and extensible.
 # States capture the current representation; Operations convert between states.
@@ -31,10 +28,11 @@ class GridState(State):
 
 
 class OverlayContext(State):
-    def __init__(self, grid: np.ndarray, overlays: List[dict], stats: Dict[str, float]):
+    def __init__(self, grid: np.ndarray, overlays: List[dict], stats: Dict[str, float], kind: Optional[str] = None):
         self.grid = np.asarray(grid, dtype=int)
         self.overlays = overlays
         self.stats = stats
+        self.kind = kind
 
 
 class ColorState(State):
@@ -68,18 +66,20 @@ class Pipeline:
                 raise TypeError(f"Operation {op.__class__.__name__} does not accept state {type(cur).__name__}")
             cur = op.apply(cur)  # type: ignore[arg-type]
         return cur
-# ===================== Palette & Luminance =====================
-def grid_to_luminance(g: np.ndarray) -> np.ndarray:
-    return vision_grid_to_luminance(g)
-# ===================== Overlay Extractor (from user) =====================
-# See README_clean.md §2.2 for a high-level description and defaults; this function is the source of truth.
-def detect_bright_overlays(
+# ===================== Overlay Extractor (pattern-based) =====================
+def detect_overlays(
     grid: Iterable[Iterable[int]],
-    palette: Optional[Dict[int, Tuple[int,int,int]]] = None,
-    **kwargs,
+    *,
+    kind: str = "h3_yellow",
+    min_repeats: int = 2,
 ) -> List[dict]:
-    # palette/kwargs ignored for the absolute detector
-    return vision_detect_bright_overlays(grid)
+    return detect_pattern_overlays(
+        grid,
+        kind=kind,  # type: ignore[arg-type]
+        min_repeats=min_repeats,
+    )
+# Pattern kinds considered during search/enumeration
+PATTERN_KINDS: List[str] = ["h3_yellow", "v3_yellow", "cross3_yellow"]
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
@@ -89,39 +89,10 @@ def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     if c-1>=0: vals.append(int(g[r,c-1]))
     if c+1<W:  vals.append(int(g[r,c+1]))
     return vals
-class BrightOverlayIdentity:
-    def __init__(self,
-                 min_count: int = 1,
-                 min_contrast: float = 0.08,
-                 min_total_area: int = 1,
-                 min_total_area_frac: float = 0.0):
+class PatternOverlayExtractor:
+    def __init__(self):
         self.overlays: List[dict] = []
-        self.last_stats = {}
-        self.min_count = min_count
-        self.min_contrast = min_contrast
-        self.min_total_area = min_total_area
-        self.min_total_area_frac = min_total_area_frac
-    def apply(self, g: np.ndarray) -> np.ndarray:
-        ovs = detect_bright_overlays(g.tolist())
-        self.overlays = ovs
-        H,W = g.shape
-        count = len(ovs)
-        max_contrast = max([ov["contrast"] for ov in ovs], default=0.0)
-        total_area = sum([ov["area"] for ov in ovs]) if ovs else 0
-        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
-        self.last_stats = dict(count=count, max_contrast=max_contrast,
-                               total_area=total_area, total_area_frac=total_area_frac)
-        return g  # identity on the grid
-    def applies(self) -> bool:
-        c  = self.last_stats.get("count", 0)
-        mx = self.last_stats.get("max_contrast", 0.0)
-        ta = self.last_stats.get("total_area", 0)
-        gaf = self.last_stats.get("total_area_frac", 0.0)
-        if c < self.min_count or mx < self.min_contrast or ta < self.min_total_area:
-            return False
-        if self.min_total_area_frac > 0.0 and gaf < self.min_total_area_frac:
-            return False
-        return True
+        self.last_stats: Dict[str, float] = {}
 
 
 # Typed-DSL operations corresponding to the above components
@@ -142,12 +113,14 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[BrightOverlayIdentity] = None):
-        self.absx = absx or BrightOverlayIdentity()
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "cross3_yellow"):
+        self.absx = absx or PatternOverlayExtractor()
+        self.kind = kind
 
     def apply(self, state: GridState) -> OverlayContext:
         g = state.grid
-        ovs = detect_bright_overlays(g.tolist())
+        # Use the configured pattern kind for overlays
+        ovs = detect_overlays(g.tolist(), kind=self.kind)
         H, W = g.shape
         count = len(ovs)
         max_contrast = max([ov["contrast"] for ov in ovs], default=0.0)
@@ -156,19 +129,51 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
         stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
         self.absx.overlays = ovs
         self.absx.last_stats = stats
-        return OverlayContext(g, ovs, stats)
+        return OverlayContext(g, ovs, stats, self.kind)
 
 
-class OpUniformCrossPattern(Operation[OverlayContext, ColorState]):
+class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
     input_type = OverlayContext
     output_type = ColorState
 
     def apply(self, state: OverlayContext) -> ColorState:
-        ok, color, _ = overlays_have_uniform_cross_color(state.grid, state.overlays)
+        # Predicts a single output color from pattern overlays.
+        # Semantics by kind:
+        #  - h3_yellow: for each overlay center at a yellow cell (4), check horizontal flanks (x,4,x);
+        #               collect the flank color x when uniform and nonzero, then return the mode (tie→min).
+        #  - v3_yellow: analogous, but on vertical flanks above/below the center.
+        #  - cross3_yellow: fallback to uniform cross color around overlay centers.
+        # If no kind-specific evidence is found, falls back to the most frequent valid cross color at centers.
+        g = state.grid
+        from collections import Counter
+        flank_colors: List[int] = []
+        kind = getattr(state, "kind", None)
+        for ov in state.overlays:
+            r, c = ov["center_row"] - 1, ov["center_col"] - 1
+            if int(g[r, c]) != 4:
+                continue
+            if kind == "h3_yellow":
+                if c-1>=0 and c+1<g.shape[1]:
+                    a, b = int(g[r, c-1]), int(g[r, c+1])
+                    if a == b and a != 0:
+                        flank_colors.append(a)
+            elif kind == "v3_yellow":
+                if r-1>=0 and r+1<g.shape[0]:
+                    a, b = int(g[r-1, c]), int(g[r+1, c])
+                    if a == b and a != 0:
+                        flank_colors.append(a)
+            elif kind == "cross3_yellow":
+                # handled by fallback below (uniform cross color around centers)
+                pass
+        if flank_colors:
+            cnt = Counter(flank_colors); top = max(cnt.values())
+            cands = [k for k,v in cnt.items() if v==top]
+            return ColorState(int(min(cands)))
+        # fallback: mode of colors at cross around overlay centers
+        ok, color, _ = overlays_have_uniform_cross_color(g, state.overlays)
         if ok and color is not None:
             return ColorState(int(color))
-        # Fallback: mode among valid overlay crosses
-        return ColorState(int(bright_overlay_cross_mode(state.grid, state.overlays)))
+        return ColorState(int(bright_overlay_cross_mode(g, state.overlays)))
 def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
     out=[]
     for ov in overlays:
@@ -197,41 +202,32 @@ def bright_overlay_cross_mode(g: np.ndarray, overlays: List[dict]) -> int:
     cnt = Counter(colors); m = max(cnt.values())
     cands = [k for k,v in cnt.items() if v==m]
     return int(min(cands))
-# Composed program body used in abstraction space: preop |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor.
+# Composed program body used in abstraction space: PatternOverlayExtractor |> UniformPatternPredicate |> OutputAgreedColor.
 def predict_bright_overlay_uniform_cross(grid: List[List[int]]) -> int:
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
     pipeline = Pipeline([
-        OpBrightOverlayIdentity(),
-        OpUniformCrossPattern(),
+        OpBrightOverlayIdentity(kind="cross3_yellow"),
+        OpUniformPatternPredicate(),
+    ])
+    out = pipeline.run(gstate)
+    assert isinstance(out, ColorState)
+    return int(out.color)
+
+def predict_with_pattern_kind(grid: List[List[int]], kind: str) -> int:
+    gstate = GridState(np.asarray(grid, dtype=int))
+    pipeline = Pipeline([
+        OpBrightOverlayIdentity(kind=kind),
+        OpUniformPatternPredicate(),
     ])
     out = pipeline.run(gstate)
     assert isinstance(out, ColorState)
     return int(out.color)
 # ===================== Core G: preops & color rules =====================
 def identity(x: np.ndarray) -> np.ndarray: return x
-def make_palette_perm(seed: int, idx: int) -> Dict[int,int]:
-    # Special-case perm_192 as identity to match the write-up
-    if idx == 192:
-        return {k:k for k in range(10)}
-    rng = np.random.RandomState(seed + idx)
-    perm = np.arange(10); rng.shuffle(perm)
-    return {k:int(perm[k]) for k in range(10)}
-def apply_perm(g: np.ndarray, pmap: Dict[int,int]) -> np.ndarray:
-    out = np.empty_like(g)
-    for k,v in pmap.items(): out[g==k]=v
-    return out
-# Builds (‘identity’ + N palette permutations) used as pre-ops in both spaces.
-# Note: In our run (seed=11, 200 preops) perm_192 was an identity mapping on used colors (README_clean.md, Note on perm_192).
+# Pre-ops: only identity (no palette permutations needed in pattern-only system)
 def build_preops_for_dataset(train_pairs: List[Tuple[np.ndarray,int]], num_preops: int = 200, seed: int = 11):
-    preops: List[Tuple[str, Callable[[np.ndarray], np.ndarray]]] = []
-    preops.append(("identity", identity))
-    for i in range(1, num_preops+1):
-        idx = i  # names from 1..num_preops
-        pmap = make_palette_perm(seed, idx)
-        def make_f(pmap):
-            return lambda x, pmap=pmap: apply_perm(x, pmap)
-        preops.append((f"perm_{idx}", make_f(pmap)))
+    preops: List[Tuple[str, Callable[[np.ndarray], np.ndarray]]] = [("identity", identity)]
     return preops
 # Global/simple color rules
 def rule_argmin_hist(x: np.ndarray) -> int:
@@ -263,24 +259,6 @@ def _mode_int(values):
     cnt = Counter(values); top = max(cnt.values())
     cands = [v for v,c in cnt.items() if c==top]
     return int(min(cands))
-def sel_color_uniform_cross_at_luma_peaks(x_hat: np.ndarray) -> int:
-    g = np.asarray(x_hat, dtype=int); lum = grid_to_luminance(g)
-    H,W = g.shape; pad = np.pad(lum, 1, mode='edge'); is_max = np.ones((H,W), dtype=bool)
-    for dy in (-1,0,1):
-        for dx in (-1,0,1):
-            if dy==0 and dx==0: continue
-            neigh = pad[1+dy:1+dy+H, 1+dx:1+dx+W]; is_max &= lum >= neigh
-    colors=[]
-    for r in range(H):
-        for c in range(W):
-            if not is_max[r,c]: continue
-            cross = _cross4_vals_any(g,r,c)
-            if cross and len(set(cross))==1 and cross[0]!=0:
-                colors.append(cross[0])
-    if not colors:
-        vals, cnt = np.unique(g[g!=0], return_counts=True)
-        return int(vals[np.argmax(cnt)]) if len(vals) else 0
-    return _mode_int(colors)
 def sel_color_uniform_cross_everywhere_mode(x_hat: np.ndarray) -> int:
     g = np.asarray(x_hat, dtype=int); H,W = g.shape; picks=[]
     for r in range(H):
@@ -320,7 +298,6 @@ def sel_color_uniform_ring_mode(x_hat: np.ndarray) -> int:
 COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("argmin_hist", rule_argmin_hist),
     ("max_id", rule_max_id),
-    ("uniform_cross_at_peaks_mode", sel_color_uniform_cross_at_luma_peaks),
     ("uniform_cross_everywhere_mode", sel_color_uniform_cross_everywhere_mode),
     ("argmax_uniform_cross_color_count", sel_color_argmax_uniform_cross_color_count),
 ]
@@ -328,27 +305,28 @@ COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = [
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    preops = build_preops_for_dataset(train_pairs, num_preops=num_preops, seed=seed)
-    # G core
-    total_G = len(preops) * len(COLOR_RULES); valid_G=[]
-    for pre_name, pre_f in preops:
-        for cn, cf in COLOR_RULES:
-            ok=True
-            for x,y in train_pairs:
-                if int(cf(pre_f(x))) != y:
-                    ok=False; break
-            if ok: valid_G.append((pre_name, cn))
-    # Overlay + predicate
-    total_ABS = len(preops); valid_ABS=[]
-    for pre_name, pre_f in preops:
+    # G core (no pre-ops)
+    total_G = len(COLOR_RULES); valid_G: List[str] = []
+    for cn, cf in COLOR_RULES:
         ok=True
         for x,y in train_pairs:
-            y_pred = predict_bright_overlay_uniform_cross(pre_f(x))
-            if y_pred != y:
+            if int(cf(x)) != y:
                 ok=False; break
-        if ok: valid_ABS.append(pre_name)
-    programs_G = [f"{pre} |> {cn}" for (pre,cn) in valid_G]
-    programs_ABS = [f"{pre} |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor" for pre in valid_ABS]
+        if ok: valid_G.append(cn)
+    # Overlay + predicate across all pattern kinds (no pre-ops)
+    total_ABS = len(PATTERN_KINDS); valid_ABS: List[str] = []
+    for kind in PATTERN_KINDS:
+        ok=True
+        for x,y in train_pairs:
+            if predict_with_pattern_kind(x.tolist(), kind) != y:
+                ok=False; break
+        if ok:
+            valid_ABS.append(kind)
+    programs_G = [f"{cn}" for cn in valid_G]
+    programs_ABS = [
+        f"PatternOverlayExtractor(kind={kind}) |> UniformPatternPredicate |> OutputAgreedColor"
+        for kind in valid_ABS
+    ]
     return {"G":{"nodes": total_G, "programs": programs_G},
             "ABS":{"nodes": total_ABS, "programs": programs_ABS}}
 # Pretty-prints the programs and node counts (README_clean.md §4).
@@ -371,32 +349,29 @@ def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
 def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     import time
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    preops = build_preops_for_dataset(train_pairs, num_preops=num_preops, seed=seed)
-    # G
+    # G (no pre-ops)
     t0=time.perf_counter(); valid_G=[]; tried=0; tries_first=None; found=False
-    for pre_name, pre_f in preops:
-        for cn, cf in COLOR_RULES:
-            tried+=1; ok=True
-            for x,y in train_pairs:
-                if int(cf(pre_f(x))) != y: ok=False; break
-            if ok:
-                valid_G.append((pre_name, cn))
-                if not found: tries_first=tried; found=True
+    for cn, cf in COLOR_RULES:
+        tried+=1; ok=True
+        for x,y in train_pairs:
+            if int(cf(x)) != y: ok=False; break
+        if ok:
+            valid_G.append(cn)
+            if not found: tries_first=tried; found=True
     t1=time.perf_counter()
-    # ABS
-    t2=time.perf_counter(); valid_ABS=[]; tried2=0; tries_first2=None; found2=False
-    for pre_name, pre_f in preops:
+    # ABS (all pattern kinds; no pre-ops)
+    t2=time.perf_counter(); valid_ABS: List[str]=[]; tried2=0; tries_first2=None; found2=False
+    for kind in PATTERN_KINDS:
         tried2+=1; ok=True
         for x,y in train_pairs:
-            y_pred = predict_bright_overlay_uniform_cross(pre_f(x))
-            if y_pred != y: ok=False; break
+            if predict_with_pattern_kind(x.tolist(), kind) != y: ok=False; break
         if ok:
-            valid_ABS.append(pre_name)
+            valid_ABS.append(kind)
             if not found2: tries_first2=tried2; found2=True
     t3=time.perf_counter()
     return {
-        "G":{"nodes": len(preops)*len(COLOR_RULES), "programs_found": len(valid_G),
+        "G":{"nodes": len(COLOR_RULES), "programs_found": len(valid_G),
              "tries_to_first": tries_first, "time_sec": t1-t0},
-        "ABS":{"nodes": len(preops), "programs_found": len(valid_ABS),
+        "ABS":{"nodes": len(PATTERN_KINDS), "programs_found": len(valid_ABS),
                "tries_to_first": tries_first2, "time_sec": t3-t2},
     } 
