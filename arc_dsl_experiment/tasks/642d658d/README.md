@@ -48,51 +48,20 @@ ARC puzzles often require recognizing small, high-contrast markers and reading l
 Design limitation: even with these additions, G’s rules do not select salient anchors; they aggregate structure indiscriminately over the grid (or weakly at local maxima) and miss the consistent “read at marker centers” behavior.
 
 ### 2.2 Overlay extractor
-`detect_bright_overlays(grid, …)` converts the grid to luminance (Rec.709) via palette, finds local maxima (non‑maximum suppression (NMS) radius=4) with global robust z‑score and local local center–surround z‑score thresholds, then grows compact components and fits small peak-centered boxes with a salience score (contrast-dominant). It returns overlay dicts with 1-based centers, box corners, peak luminance, contrast, area.
+`detect_bright_overlays(grid, …)` converts the grid to luminance (non‑maximum suppression (NMS) radius=4) via palette, finds local maxima (NMS radius=4) with global robust z‑score and local center–surround z‑score thresholds, then grows compact components and fits small peak-centered boxes with a salience score (contrast-dominant). It returns overlay dicts with 1-based centers, box corners, peak luminance, contrast, area.
 
 ### 2.3 Abstraction and predicate
 - Abstraction: `BrightOverlayIdentity`
   - Identity on the grid; stores overlays and minimal stats (count, max_contrast, total_area, …).
-  - It includes a precise applicability check. Let `H×W` be the grid size and let the extractor
-produce a list of overlays, each with `area` (in pixels), `peak_lum` (0..1 luminance at
-the center) and `contrast = peak_lum − surround_mean`, where `surround_mean` is computed in a
-padded window of size `[y1−context_pad : y2+context_pad, x1−context_pad : x2+context_pad]`
-excluding the overlay box. Define summary stats:
-
-- `count` = number of overlays
-- `max_contrast` = max over overlays of `contrast`
-- `total_area` = sum of overlay `area`
-- `total_area_frac` = `total_area / (H·W)`
-
-The abstraction is considered **applicable** iff all hold (defaults in parentheses):
-
-1. `count ≥ min_count` (**1**)
-2. `max_contrast ≥ min_contrast` (**0.08**)
-3. `total_area ≥ min_total_area` (**1**)
-4. If `min_total_area_frac > 0`, then `total_area_frac ≥ min_total_area_frac` (**0.0** disables this test)
-
-Implementation sketch:
-```python
-def applies(self) -> bool:
-    c  = self.last_stats.get('count', 0)
-    mx = self.last_stats.get('max_contrast', 0.0)
-    ta = self.last_stats.get('total_area', 0)
-    gaf = self.last_stats.get('total_area_frac', 0.0)
-    if c < self.min_count or mx < self.min_contrast or ta < self.min_total_area:
-        return False
-    if self.min_total_area_frac > 0.0 and gaf < self.min_total_area_frac:
-        return False
-    return True
-```
-
+  - It includes a precise applicability check. Let `H×W` be the grid size and let the extractor produce overlays with `area`, `peak_lum`, and `contrast = peak_lum − surround_mean`. Summary stats: `count`, `max_contrast`, `total_area`, `total_area_frac = total_area/(H·W)`. Applicable iff: `count ≥ 1`, `max_contrast ≥ 0.08`, `total_area ≥ 1`, and if enabled, `total_area_frac ≥ min_total_area_frac`.
 - Pattern check (predicate): `UniformCrossPattern`
-  - At each overlay center, read the 4-neighborhood (↑↓←→). The predicate succeeds iff (a) each center’s cross is uniform and non-zero, and (b) all overlays agree on the same color. The predictor then emits that agreed color.
+  - At each overlay center, read the 4-neighborhood (↑↓←→). The predicate succeeds iff (a) each center’s cross is uniform and non-zero, and (b) all overlays agree on the same color. Then `OutputAgreedColor` emits that color.
 - Program schema (abstraction space):
 ```
 <preop>
   |> BrightOverlayIdentity
   |> UniformCrossPattern
-  |> OutputAgreedColor  <!-- outputs the agreed color -->
+  |> OutputAgreedColor
 ```
 
 ### 2.4 Extensions to G
@@ -120,11 +89,11 @@ To reduce abstraction cost per node:
 
 ## 4. Results
 
-### 4.1 Program strings (abstraction space, full 3-train, 200 preops)
-- `identity |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor  <!-- outputs the agreed color -->`
-- `perm_192 |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor  <!-- outputs the agreed color -->`
+### 4.1 Found programs (full 3-train, 200 preops)
+- `identity |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor`
+- `perm_192 |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor`
 
-Interpretation: the overlay detector is luminance-based; some palette permutations preserve the “bright marker” behavior so the predicate still reads the same color.
+Note on `perm_192`: it is a palette–permutation pre-op (bijection on colors 0..9). On this task, `perm_192` maps every color that actually appears to itself (e.g., 2→2, 3→3, 8→8), so applying it leaves all pixels unchanged. The search still treats each pre-op as a distinct candidate; any pre-op that is effectively a no‑op on the observed data yields the same valid program as `identity`.
 
 ### 4.2 Node counts and timings
 
@@ -182,10 +151,6 @@ Fast-first behavior: On grids where the high-percentile peak selector isolates t
 Overlay-driven salience, composed with a simple `UniformCrossPattern` predicate, solves the puzzle immediately with compact programs. The trade-off is higher per-node compute versus G’s cheap but expressively weaker search. A fast-first path shows promising speedups when it hits; with caching/vectorization, the abstraction route is a strong candidate for default inclusion. Meanwhile, augmenting G with anchor-aware primitives would further close the gap without requiring full overlays in all cases.
 
 ---
-
-## Appendix (program strings)
-- `identity |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor  <!-- outputs the agreed color -->`
-- `perm_192 |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor  <!-- outputs the agreed color -->`
 
 ## Glossary
 
