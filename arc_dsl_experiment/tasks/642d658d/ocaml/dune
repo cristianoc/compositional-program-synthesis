@@ -1,4 +1,0 @@
-(executable
- (name main)
- (public_name overlay_arc)
- (libraries yojson unix))
