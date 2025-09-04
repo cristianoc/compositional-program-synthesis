@@ -109,6 +109,45 @@ To reduce abstraction cost per node:
 - Fast-first selector: 8-nbr local maxima above a high luminance percentile (pₕᵢ≈99.7). If all selected centers have uniform crosses and agree on the color → return immediately; else fallback to full overlay detection.
 - Tiny cache: LRU cache keyed by grid bytes for the fast centers.
 
+### 2.6 Typed DSL and composition
+We expose the abstraction pipeline as a small, typed DSL to make composition explicit and extensible.
+
+- State types:
+  - `GridState`: holds a grid (`np.ndarray[int]`).
+  - `OverlayContext`: holds the same grid plus `overlays` and summary `stats`.
+  - `ColorState`: holds the final scalar color (`int`).
+
+- Operation interface:
+  - `Operation[InState, OutState]` with `accepts(state)` and `apply(state)`.
+  - A `Pipeline([op1, op2, ...])` runs ops sequentially; each op declares the input/output state types it accepts/produces.
+
+- Built-in operations (used here):
+  - `PreOpPalette(GridState→GridState)`: optional palette relabeling (used by G; can precede abstraction when desired).
+  - `OpBrightOverlayIdentity(GridState→OverlayContext)`: runs `detect_bright_overlays`, stores overlays and stats.
+  - `OpUniformCrossPattern(OverlayContext→ColorState)`: checks uniform 4-neighborhood at overlay centers and emits the agreed color (falls back to mode if needed).
+
+- Example composition (abstraction space):
+```python
+from dsl import Pipeline, GridState, OpBrightOverlayIdentity, OpUniformCrossPattern
+
+pipeline = Pipeline([
+    OpBrightOverlayIdentity(),
+    OpUniformCrossPattern(),
+])
+out = pipeline.run(GridState(grid))  # out is a ColorState
+color = out.color
+```
+
+This structure makes it straightforward to add new overlay-level primitives (e.g., ring checks, object graphs) by implementing new `Operation` classes with the appropriate input/output state types and inserting them into the `Pipeline`.
+
+#### Operation catalog (current)
+- `PreOpPalette: GridState → GridState`
+  - Applies a palette permutation or identity to the grid.
+- `OpBrightOverlayIdentity: GridState → OverlayContext`
+  - Runs `detect_bright_overlays`; attaches `overlays` and summary `stats` while preserving the grid.
+- `OpUniformCrossPattern: OverlayContext → ColorState`
+  - Checks uniform 4-neighborhood at overlay centers; emits agreed color (fallback to mode if needed).
+
 ## 3. Experimental Setup
 - Task: The 3-train ARC puzzle (1 test). Train outputs are single colors.
 - Spaces:
@@ -238,4 +277,8 @@ Notes:
    ```bash
    python3 -m pip install --user --break-system-packages numpy matplotlib
    ```
+
+Tracked outputs:
+- `images/overlay_train_*.png`, `images/overlay_test.png`
+- `repro_stats.json` (node counts, programs_found, tries_to_first, timing)
 
