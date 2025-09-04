@@ -1,3 +1,13 @@
+# -----------------------------------------------------------------------------
+# Reproduction script for “Overlay abstraction vs. core G” experiment
+# This script:
+#  • Loads task.json and builds pre-ops (palette permutations + identity)   (README_clean.md §3)
+#  • Enumerates program spaces (G vs. Abstraction) and checks ALL train     (README_clean.md §3–4)
+#  • Prints programs found & node counts/timings                            (README_clean.md §4)
+#  • Renders annotated images (overlays + predicted color)                  (README_clean.md Figures)
+# No behavior changes are made; this is the exact harness used for results.
+# -----------------------------------------------------------------------------
+
 
 import json, time, numpy as np
 from importlib import reload
@@ -18,6 +28,7 @@ def main():
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
 
     # Enumerate and print programs (composed form)
+    # Pretty print programs found in both spaces (README_clean.md §4):
     res = dsl.print_programs_for_task(task, num_preops=200, seed=11)
 
     # Measure timing and counts
@@ -33,7 +44,7 @@ def main():
             for cn, cf in color_rules:
                 tried += 1
                 ok = True
-                for x,y in train_pairs:
+                for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
                     if int(cf(pre_f(x))) != y:
                         ok=False; break
                 if ok:
@@ -48,7 +59,7 @@ def main():
         for pre_name, pre_f in preops:
             tried2 += 1
             ok=True
-            for x,y in train_pairs:
+            for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
                 y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x))
                 if y_pred != y:
                     ok=False; break
