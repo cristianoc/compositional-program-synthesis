@@ -48,7 +48,7 @@ ARC puzzles often require recognizing small, high-contrast markers and reading l
 Design limitation: even with these additions, G’s rules do not select salient anchors; they aggregate structure indiscriminately over the grid (or weakly at local maxima) and miss the consistent “read at marker centers” behavior.
 
 ### 2.2 Overlay extractor
-`detect_bright_overlays(grid, …)` converts the grid to luminance (Rec.709) via palette, finds local maxima (non‑maximum suppression (NMS) radius=4) with global robust z‑score and local local center–surround z‑score thresholds, then grows compact components and fits small peak-centered boxes with a salience score (contrast-dominant). It returns overlay dicts with 1-based centers, box corners, peak luminance, contrast, area.
+`detect_bright_overlays(grid, …)` converts the grid to luminance (Rec.709) via palette, finds 8-neighborhood local maxima with non‑maximum suppression (NMS radius=4), keeps those whose luminance is in the top tail (≥ 99.7th percentile), and places a fixed 3×3 box centered at each kept peak (clipped at borders). For each box, it computes a simple contrast score as (peak luminance − mean luminance of the padded surround window) and returns overlay dicts with 1-based centers, box corners, peak luminance, contrast, and area.
 
 ### 2.3 Abstraction and predicate
 - Abstraction: `BrightOverlayIdentity`
@@ -103,6 +103,8 @@ We added local-structure color rules to G (grid → scalar color) to test whethe
 - `uniform_ring_mode` (8-nbr ring uniformity)
 
 Despite these, G lacks the salient-anchor selection step the overlay extractor provides.
+
+Implementation parity: both Python and OCaml use the same absolute-peak 3×3 detector for this task, and we emit normalized stats to keep them in sync (`python_stats.json` / `ocaml_stats.json`). Rendering order is deterministic (overlays sorted by `(center_row, center_col)`).
 
 ### 2.5 Fast-first path & caching
 To reduce abstraction cost per node:
@@ -252,14 +254,8 @@ Overlay-driven salience, composed with a simple `UniformCrossPattern` predicate,
 **Detector defaults (for reproducibility):**
 
 - `nms_radius = 4`
-- `local_radii = (1, 2, 3)`
-- `peak_k = 3.4` (global robust z‑score threshold)
-- `local_k = 3.8` (max local center–surround z‑score threshold)
 - `p_hi = 99.7` (high‑tail luminance percentile)
-- `drop_threshold = 0.06` (component growth: keep if `lum ≥ peak·(1 − drop_threshold)`)
-- `scale_gamma = 1.0` (sets overlay half‑size from component spread)
-- `max_radius = 1.4` (cap before rounding; ≈ 3×3 boxes when ≤ 1.5)
-- `context_pad = 2` (pixels around each box to estimate surround)
+- `context_pad = 2` (pixels around each 3×3 box to estimate surround)
 
 ## Reproducing results (overlay abstraction experiment)
 
