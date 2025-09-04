@@ -166,6 +166,18 @@ def main():
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        "figure.dpi": 150,
+        "savefig.dpi": 150,
+        "savefig.transparent": False,
+        "savefig.facecolor": "white",
+        "savefig.edgecolor": "white",
+        "font.family": "DejaVu Sans",
+        "text.antialiased": False,
+        "lines.antialiased": False,
+        "patch.antialiased": False,
+        "path.simplify": False,
+    })
     from matplotlib.patches import Rectangle
     from matplotlib.lines import Line2D
 
@@ -215,7 +227,10 @@ def main():
         ax2.set_xticks([]); ax2.set_yticks([])
         # Use fixed metadata to avoid time stamps or varying text chunks in PNG
         meta = {"Date": "1970-01-01T00:00:00", "Software": "arc-repro"}
-        plt.tight_layout(); plt.savefig(out_path, bbox_inches="tight", metadata=meta); plt.close(fig); return out_path
+        # Avoid tight_layout heuristics shifting content; rely on fixed bbox
+        plt.savefig(out_path, bbox_inches="tight", metadata=meta)
+        plt.close(fig)
+        return out_path
 
     # Train pics
     images_dir = HERE / "images"
