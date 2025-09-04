@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic
 import numpy as np
 from vision import (
-    PALETTE as VISION_PALETTE,
     grid_to_luminance as vision_grid_to_luminance,
     detect_bright_overlays_absolute as vision_detect_bright_overlays,
 )

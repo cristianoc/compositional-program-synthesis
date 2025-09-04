@@ -31,7 +31,7 @@ def main():
     # Pretty print programs found in both spaces (README_clean.md §4):
     res = dsl.print_programs_for_task(task, num_preops=200, seed=11)
 
-    # Measure timing and counts
+    # Measure timing and counts (single pass, rounded to reduce noise)
     def measure(task, num_preops=200, seed=11):
         preops = dsl.build_preops_for_dataset(train_pairs, num_preops=num_preops, seed=seed)
 
@@ -69,8 +69,8 @@ def main():
         t3 = time.perf_counter()
 
         return {
-            "G": {"nodes": len(preops)*len(color_rules), "programs_found": len(valid_G), "tries_to_first": tries_first_G, "time_sec": t1-t0},
-            "ABS":{"nodes": len(preops), "programs_found": len(valid_ABS), "tries_to_first": tries_first_ABS, "time_sec": t3-t2},
+            "G": {"nodes": len(preops)*len(color_rules), "programs_found": len(valid_G), "tries_to_first": tries_first_G, "time_sec": round(t1-t0, 2)},
+            "ABS":{"nodes": len(preops), "programs_found": len(valid_ABS), "tries_to_first": tries_first_ABS, "time_sec": round(t3-t2, 2)},
         }
 
     stats = measure(task, num_preops=200, seed=11)
