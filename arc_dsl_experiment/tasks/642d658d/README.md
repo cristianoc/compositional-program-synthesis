@@ -20,9 +20,9 @@
 
 ## Pattern overlays in action
 - Left: grid with overlays for each pattern kind.
-  - `overlay_train_i.png`: h3_yellow (horizontal `(x,4,x)` centers)
-  - `overlay_train_i_v.png`: v3_yellow (vertical `(x,4,x)` centers)
-  - `overlay_train_i_x.png`: cross3_yellow (one overlay per yellow center; shown as a cross)
+  - `overlay_train_i.png`: h3 (horizontal `(x,c,x)` centers, for chosen color `c`)
+  - `overlay_train_i_v.png`: v3 (vertical `(x,c,x)` centers, for chosen color `c`)
+  - `overlay_train_i_x.png`: cross3 (one overlay per pixel of color `c`; shown as a cross)
 - Right: predicted color.
 
 | Train 1 (GT=2) | Train 2 (GT=3) |
@@ -34,38 +34,38 @@
 | ![](images/overlay_train_3.png) | ![](images/overlay_test.png) |
 
 ## Abstract
-The `PatternOverlayExtractor` emits overlays for three explicit patterns: h3_yellow `(x,4,x)` horizontally, v3_yellow `(x,4,x)` vertically, and cross3_yellow (one overlay per yellow pixel). A `UniformPatternPredicate` then reads the local structure consistent with the pattern kind and outputs a single color. Program search enumerates these three pattern kinds. On this task, all three pattern kinds yield a correct solution.
+The `PatternOverlayExtractor` emits overlays for three explicit pattern kinds that are now color-parameterized: `h3` (interpreted as horizontal `(x,c,x)` with center color `c`), `v3` (vertical `(x,c,x)`), and `cross3` (one overlay per pixel of color `c`). A `UniformPatternPredicate` reads the local structure consistent with the pattern kind and outputs a single color. Program search enumerates pattern kinds × colors. On this task, multiple (kind, color) settings yield a correct solution.
 
 ## 1. Methods (pattern-only)
 
-- `PatternOverlayExtractor(kind=...)` with kinds:
-  - `h3_yellow`: one overlay per center matching `(x,4,x)` horizontally
-  - `v3_yellow`: one overlay per center matching `(x,4,x)` vertically
-  - `cross3_yellow`: one overlay per yellow pixel (drawn as a cross in the renderer)
+- `PatternOverlayExtractor(kind=..., color=c)` with kinds:
+  - `h3`: one overlay per center matching `(x,c,x)` horizontally (center color is `c`)
+  - `v3`: one overlay per center matching `(x,c,x)` vertically (center color is `c`)
+  - `cross3`: one overlay per pixel of color `c` (drawn as a cross in the renderer)
 
 - `UniformPatternPredicate` (kind-aware):
-  - For `h3_yellow`, uses horizontal flanks; for `v3_yellow`, vertical flanks; for `cross3_yellow`, uniform cross color; falls back to cross-mode if needed.
+  - For `h3`, uses horizontal flanks; for `v3`, vertical flanks; for `cross3`, uniform cross color; falls back to cross-mode if needed.
 
 - Program schema (abstraction space):
 ```
-PatternOverlayExtractor(kind=...) |> UniformPatternPredicate |> OutputAgreedColor
+PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> OutputAgreedColor
 ```
 
 ## 2. Enumeration spaces
 
 - G core: color rules only (no pre-ops). Nodes = number of rules (here 4).
-- Abstraction: pattern kinds only (no pre-ops). Nodes = 3.
+- Abstraction: pattern kinds × colors (1–9), no pre-ops. Nodes = 3 × 9 = 27.
 
 ## 3. Results
 
 - Programs found (abstraction):
-  - `PatternOverlayExtractor(kind=h3_yellow) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=v3_yellow) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=cross3_yellow) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=h3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=v3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=cross3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
 
 - Node counts (this run):
   - G core: 4
-  - Abstraction: 3
+  - Abstraction: 27
 
 ## Reproducing
 

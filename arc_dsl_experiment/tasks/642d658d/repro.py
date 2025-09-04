@@ -22,9 +22,26 @@ dsl = reload(dsl)
 
 TASK_PATH = str(HERE / "task.json")
 
+def _best_color_for_kind(task, kind: str):
+    train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
+    best_c, best_ok = None, -1
+    for c in range(1,10):
+        ok = 0
+        for x,y in train_pairs:
+            yp = dsl.predict_with_pattern_kind(x.tolist(), kind, c)
+            ok += int(yp == y)
+        if ok > best_ok:
+            best_ok = ok; best_c = c
+    return int(best_c) if best_c is not None else 1
+
+
 def main():
     task = json.loads(Path(TASK_PATH).read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
+    # choose best colors per kind on train
+    COLOR_H3 = _best_color_for_kind(task, "h3")
+    COLOR_V3 = _best_color_for_kind(task, "v3")
+    COLOR_CROSS3 = _best_color_for_kind(task, "cross3")
 
     # Enumerate and print programs (composed form)
     # Pretty print programs found in both spaces (README_clean.md §4):
@@ -51,7 +68,7 @@ def main():
                     if tries_first_G is None: tries_first_G = tried
         t1 = time.perf_counter()
 
-        # Abstraction
+        # Abstraction (use best color for cross3 found on train)
         t2 = time.perf_counter()
         valid_ABS = []
         tried2 = 0; tries_first_ABS=None
@@ -59,7 +76,7 @@ def main():
             tried2 += 1
             ok=True
             for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x))
+                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_CROSS3)
                 if y_pred != y:
                     ok=False; break
             if ok:
@@ -77,31 +94,32 @@ def main():
     print(stats)
     # Quick evaluation of other pattern kinds (v3, cross3) on train
     def eval_kind(kind: str):
+        best_c = _best_color_for_kind(task, kind)
         res = []
         for x,y in train_pairs:
-            yp = dsl.predict_with_pattern_kind(x.tolist(), kind)
+            yp = dsl.predict_with_pattern_kind(x.tolist(), kind, best_c)
             res.append(int(yp==y))
-        return sum(res), len(res)
+        return sum(res), len(res), best_c
 
-    k_v3_ok, k_total = eval_kind("v3_yellow")
-    k_cross_ok, _ = eval_kind("cross3_yellow")
-    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total}\n cross3: {k_cross_ok}/{k_total}")
+    k_v3_ok, k_total, k_v3_c = eval_kind("v3")
+    k_cross_ok, _, k_cross_c = eval_kind("cross3")
+    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n cross3: {k_cross_ok}/{k_total} (color={k_cross_c})")
     # Test-set predictions (no GT in ARC test; we just report)
     gtest = np.array(task["test"][0]["input"], dtype=int)
-    pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3_yellow")
-    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "cross3_yellow")
+    pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3", COLOR_V3)
+    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "cross3", COLOR_CROSS3)
     print(f"Test predictions: v3={pred_v3} cross3={pred_cross3}")
 
     # Verify overlay counts for h3_yellow vs count of yellow pixels
-    def count_yellow(g):
-        return int((np.array(g)==4).sum())
+    def count_color(g, color):
+        return int((np.array(g)==int(color)).sum())
     for split in ("train","test"):
         exs = task[split]
         for i, ex in enumerate(exs, start=1):
             g = ex["input"]
-            n_y = count_yellow(g)
-            ovs_h3y = dsl.detect_overlays(g, kind="h3_yellow")
-            print(f"{split}[{i}] yellow={n_y} overlays_h3_yellow={len(ovs_h3y)}")
+            n_c = count_color(g, COLOR_H3)
+            ovs_h3 = dsl.detect_overlays(g, kind="h3", color=COLOR_H3)
+            print(f"{split}[{i}] color={COLOR_H3} count={n_c} overlays_h3={len(ovs_h3)}")
     # Emit a tracked artifact with stable ordering
     out_stats = HERE / "repro_stats.json"
     with open(out_stats, "w", encoding="utf-8") as f:
@@ -115,9 +133,9 @@ def main():
             return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
         for ex in task["train"]:
             g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3_yellow"))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3_yellow"))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3_yellow"))
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3", color=COLOR_CROSS3))
             details["train"].append({
                 "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
@@ -126,9 +144,9 @@ def main():
             })
         for ex in task["test"]:
             g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3_yellow"))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3_yellow"))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3_yellow"))
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3", color=COLOR_CROSS3))
             details["test"].append({
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
@@ -161,9 +179,9 @@ def main():
             img[g == k] = (r, gg, b)
         return img
 
-    def render_grid_with_overlays(g, pred_color, title, out_path, kind="h3_yellow"):
+    def render_grid_with_overlays(g, pred_color, title, out_path, kind="h3", color: int = 1):
         rgb = grid_to_rgb(g)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind)
+        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
         H, W = g.shape
         fig, axes = plt.subplots(1, 2, figsize=(12, 8), dpi=150)
         fig.canvas.toolbar_visible = False
@@ -175,7 +193,7 @@ def main():
         ax.set_xticks([]); ax.set_yticks([])
         overlays_sorted = sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"]))
         for ov in overlays_sorted:
-            if kind == "cross3_yellow":
+            if kind == "cross3":
                 rr = ov["center_row"] - 1
                 cc = ov["center_col"] - 1
                 # vertical arm (3 cells): from rr-1 to rr+1 at column cc
@@ -201,35 +219,35 @@ def main():
 
     for i, ex in enumerate(task["train"], start=1):
         g = np.array(ex["input"], dtype=int)
-        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist())
+        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_CROSS3)
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: h3_yellow (GT={int(ex['output'][0][0])})",
+            f"Train {i}: h3 (color={COLOR_H3}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}.png"),
-            kind="h3_yellow",
+            kind="h3", color=COLOR_H3,
         )
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: v3_yellow (GT={int(ex['output'][0][0])})",
+            f"Train {i}: v3 (color={COLOR_V3}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}_v.png"),
-            kind="v3_yellow",
+            kind="v3", color=COLOR_V3,
         )
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: cross3_yellow (GT={int(ex['output'][0][0])})",
+            f"Train {i}: cross3 (color={COLOR_CROSS3}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}_x.png"),
-            kind="cross3_yellow",
+            kind="cross3", color=COLOR_CROSS3,
         )
 
     # Test pic
     gtest = np.array(task["test"][0]["input"], dtype=int)
-    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist())
-    render_grid_with_overlays(gtest, predt, "Test: h3_yellow", str(images_dir / "overlay_test.png"), kind="h3_yellow")
-    render_grid_with_overlays(gtest, predt, "Test: v3_yellow", str(images_dir / "overlay_test_v.png"), kind="v3_yellow")
-    render_grid_with_overlays(gtest, predt, "Test: cross3_yellow", str(images_dir / "overlay_test_x.png"), kind="cross3_yellow")
+    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_CROSS3)
+    render_grid_with_overlays(gtest, predt, f"Test: h3 (color={COLOR_H3})", str(images_dir / "overlay_test.png"), kind="h3", color=COLOR_H3)
+    render_grid_with_overlays(gtest, predt, f"Test: v3 (color={COLOR_V3})", str(images_dir / "overlay_test_v.png"), kind="v3", color=COLOR_V3)
+    render_grid_with_overlays(gtest, predt, f"Test: cross3 (color={COLOR_CROSS3})", str(images_dir / "overlay_test_x.png"), kind="cross3", color=COLOR_CROSS3)
 
 if __name__ == "__main__":
     main()

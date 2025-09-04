@@ -4,7 +4,7 @@ from typing import Iterable, List, Literal
 import numpy as np
 
 
-PatternKind = Literal["h3_yellow", "v3_yellow", "cross3_yellow"]
+PatternKind = Literal["h3", "v3", "cross3"]
 
 
 def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
@@ -37,27 +37,28 @@ def _emit_overlay(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: i
 def detect_pattern_overlays(
     grid: Iterable[Iterable[int]],
     *,
-    kind: PatternKind = "h3_yellow",
+    kind: PatternKind = "h3",
+    color: int,
     min_repeats: int = 2,
     dedup_centers: bool = True,
 ) -> List[dict]:
     """
     Detect overlays by simple pattern templates.
 
-    - kind="h3_yellow": emit one overlay per center matching (x, 4, x) horizontally.
-    - kind="v3_yellow": emit one overlay per center matching (x, 4, x) vertically.
-    - kind="cross3_yellow": emit one overlay per yellow (4) pixel with a 3x3 box.
+    - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
+    - kind="v3": emit one overlay per center matching (x, color, x) vertically.
+    - kind="cross3": emit one overlay per pixel of the given color with a 3x3 box.
     """
     g = _to_np_grid(grid)
     H, W = g.shape
     overlays: List[dict] = []
     overlay_id = 1
 
-    if kind == "cross3_yellow":
-        # One overlay per yellow pixel (value 4). Box is 3x3 clipped to grid.
+    if kind == "cross3":
+        # One overlay per pixel of the given color. Box is 3x3 clipped to grid.
         for r in range(H):
             for c in range(W):
-                if int(g[r, c]) != 4:
+                if int(g[r, c]) != int(color):
                     continue
                 y1 = max(0, r - 1); x1 = max(0, c - 1)
                 y2 = min(H - 1, r + 1); x2 = min(W - 1, c + 1)
@@ -65,11 +66,11 @@ def detect_pattern_overlays(
                 overlay_id += 1
         # For this kind, we return immediately (no grouping by repeats)
         return overlays
-    elif kind == "h3_yellow":
-        # One overlay per yellow pixel that forms (x,4,x) with its horizontal neighbors
+    elif kind == "h3":
+        # One overlay per pixel of the given color that forms (x,color,x) with its horizontal neighbors
         for r in range(H):
             for c in range(W):
-                if int(g[r, c]) != 4:
+                if int(g[r, c]) != int(color):
                     continue
                 if c-1 < 0 or c+1 >= W:
                     continue
@@ -78,11 +79,11 @@ def detect_pattern_overlays(
                     overlays.append(_emit_overlay(r, c, r, c-1, r, c+1, overlay_id))
                     overlay_id += 1
         return overlays
-    elif kind == "v3_yellow":
-        # One overlay per yellow pixel that forms vertical (x,4,x) with its neighbors
+    elif kind == "v3":
+        # One overlay per pixel of the given color that forms vertical (x,color,x) with its neighbors
         for r in range(H):
             for c in range(W):
-                if int(g[r, c]) != 4:
+                if int(g[r, c]) != int(color):
                     continue
                 if r-1 < 0 or r+1 >= H:
                     continue
