@@ -18,6 +18,18 @@
 |---|
 | ![](images/test_0_in.png) |
 
+## Overlay detector in action
+- Yellow boxes show detected bright overlays (centers used by `UniformCrossPattern`).
+- Right panels show the predicted 1×1 color for each grid.
+
+| Train 1 (GT=2) | Train 2 (GT=3) |
+|---|---|
+| ![](images/overlay_train1.png) | ![](images/overlay_train2.png) |
+
+| Train 3 (GT=8) | Test input (pred=2) |
+|---|---|
+| ![](images/overlay_train3.png) | ![](images/overlay_test0.png) |
+
 ## Abstract
 We investigated whether a salience-driven overlay abstraction improves program search for an ARC puzzle compared to a core DSL ("G") that operates with palette pre-ops and global color rules. We integrated an overlay extractor (`detect_bright_overlays`) as an identity abstraction that stores overlays, composed it with a `UniformCrossPattern` predicate, and compared against G (including several new local-structure primitives). On the full 3-train task, G found no solutions (1.70 s, 1,005 nodes). The overlay pipeline found solutions immediately (1st candidate) but at higher per-node cost (24.9 s, 201 nodes). A fast-first path reduced abstraction time substantially on a 2-train subset (24.8 s → 8.4 s for 201 nodes) but didn’t help the full set due to predicate failure triggering the fallback. We recommend merging the overlay abstraction + predicate into the DSL, plus caching and vectorization to cut per-node cost.
 
