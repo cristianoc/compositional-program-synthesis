@@ -76,6 +76,11 @@ def main():
     stats = measure(task, num_preops=200, seed=11)
     print("\n=== STATS (200 preops) ===")
     print(stats)
+    # Emit a tracked artifact with stable ordering
+    out_stats = HERE / "repro_stats.json"
+    with open(out_stats, "w", encoding="utf-8") as f:
+        json.dump(stats, f, indent=2, sort_keys=True)
+    print(f"Wrote {out_stats}")
 
     # Render pictures (train + test)
     import matplotlib.pyplot as plt

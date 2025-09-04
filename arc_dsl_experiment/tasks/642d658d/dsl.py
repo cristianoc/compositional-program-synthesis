@@ -11,9 +11,60 @@
 
 
 from __future__ import annotations
-from typing import Dict, Iterable, List, Tuple, Optional, Callable
+from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic
 import numpy as np
 from functools import lru_cache
+# ===================== Typed, compositional DSL =====================
+# Minimal typed-DSL scaffolding to make composition explicit and extensible.
+# States capture the current representation; Operations convert between states.
+
+class State:  # marker base
+    pass
+
+
+class GridState(State):
+    def __init__(self, grid: np.ndarray):
+        self.grid = np.asarray(grid, dtype=int)
+
+
+class OverlayContext(State):
+    def __init__(self, grid: np.ndarray, overlays: List[dict], stats: Dict[str, float]):
+        self.grid = np.asarray(grid, dtype=int)
+        self.overlays = overlays
+        self.stats = stats
+
+
+class ColorState(State):
+    def __init__(self, color: int):
+        self.color = int(color)
+
+
+InS = TypeVar("InS", bound=State)
+OutS = TypeVar("OutS", bound=State)
+
+
+class Operation(Generic[InS, OutS]):
+    input_type: Type[State] = State
+    output_type: Type[State] = State
+
+    def accepts(self, state: State) -> bool:
+        return isinstance(state, self.input_type)
+
+    def apply(self, state: InS) -> OutS:
+        raise NotImplementedError
+
+
+class Pipeline:
+    def __init__(self, ops: List[Operation]):
+        self.ops = ops
+
+    def run(self, state: State) -> State:
+        cur = state
+        for op in self.ops:
+            if not op.accepts(cur):
+                raise TypeError(f"Operation {op.__class__.__name__} does not accept state {type(cur).__name__}")
+            cur = op.apply(cur)  # type: ignore[arg-type]
+        return cur
 # ===================== Palette & Luminance =====================
 PALETTE = {
     0:(0,0,0), 1:(0,0,255), 2:(255,0,0), 3:(0,255,0), 4:(255,255,0),
@@ -207,6 +258,53 @@ class BrightOverlayIdentity:
         if self.min_total_area_frac > 0.0 and gaf < self.min_total_area_frac:
             return False
         return True
+
+
+# Typed-DSL operations corresponding to the above components
+
+class PreOpPalette(Operation[GridState, GridState]):
+    input_type = GridState
+    output_type = GridState
+
+    def __init__(self, name: str, f: Callable[[np.ndarray], np.ndarray]):
+        self.name = name
+        self.f = f
+
+    def apply(self, state: GridState) -> GridState:
+        return GridState(self.f(state.grid))
+
+
+class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
+    input_type = GridState
+    output_type = OverlayContext
+
+    def __init__(self, absx: Optional[BrightOverlayIdentity] = None):
+        self.absx = absx or BrightOverlayIdentity()
+
+    def apply(self, state: GridState) -> OverlayContext:
+        g = state.grid
+        ovs = detect_bright_overlays(g.tolist())
+        H, W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov["contrast"] for ov in ovs], default=0.0)
+        total_area = sum([ov["area"] for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H * W) if H * W > 0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        self.absx.overlays = ovs
+        self.absx.last_stats = stats
+        return OverlayContext(g, ovs, stats)
+
+
+class OpUniformCrossPattern(Operation[OverlayContext, ColorState]):
+    input_type = OverlayContext
+    output_type = ColorState
+
+    def apply(self, state: OverlayContext) -> ColorState:
+        ok, color, _ = overlays_have_uniform_cross_color(state.grid, state.overlays)
+        if ok and color is not None:
+            return ColorState(int(color))
+        # Fallback: mode among valid overlay crosses
+        return ColorState(int(bright_overlay_cross_mode(state.grid, state.overlays)))
 def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
     out=[]
     for ov in overlays:
@@ -273,13 +371,19 @@ def _fast_uniform_cross_color_if_agree(g: np.ndarray):
 # Composed program body used in abstraction space: preop |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor.
 # Uses a fast-first path (cheap local-max selector) then falls back to full overlays (README_clean.md §2.5, §4).
 def predict_bright_overlay_uniform_cross(grid: List[List[int]]) -> int:
-    g = np.asarray(grid, dtype=int)
-    fast = _fast_uniform_cross_color_if_agree(g)
-    if fast is not None: return int(fast)
-    absx = BrightOverlayIdentity(); absx.apply(g)
-    ok, color, _ = overlays_have_uniform_cross_color(g, absx.overlays)
-    if ok and color is not None: return int(color)
-    return bright_overlay_cross_mode(g, absx.overlays)
+    # Typed pipeline: Grid -> OverlayContext -> Color
+    gstate = GridState(np.asarray(grid, dtype=int))
+    # Fast-first check preserved for behavior parity
+    fast = _fast_uniform_cross_color_if_agree(gstate.grid)
+    if fast is not None:
+        return int(fast)
+    pipeline = Pipeline([
+        OpBrightOverlayIdentity(),
+        OpUniformCrossPattern(),
+    ])
+    out = pipeline.run(gstate)
+    assert isinstance(out, ColorState)
+    return int(out.color)
 # ===================== Core G: preops & color rules =====================
 def identity(x: np.ndarray) -> np.ndarray: return x
 def make_palette_perm(seed: int, idx: int) -> Dict[int,int]:
