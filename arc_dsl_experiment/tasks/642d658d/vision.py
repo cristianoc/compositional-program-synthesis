@@ -280,3 +280,58 @@ def fast_uniform_cross_color_if_agree(g: np.ndarray) -> Optional[int]:
     if len(set(colors)) == 1:
         return int(colors[0])
     return None
+
+
+def detect_bright_overlays_absolute(
+    grid: Iterable[Iterable[int]],
+    *,
+    p_hi: float = 99.7,
+    nms_radius: int = 4,
+    context_pad: int = 2,
+) -> List[dict]:
+    g = np.asarray(grid, dtype=int)
+    if g.ndim != 2:
+        raise ValueError("grid must be 2-D")
+    h, w = g.shape
+    lum = grid_to_luminance(g)
+    # local maxima
+    padded = np.pad(lum, nms_radius, mode="edge")
+    peaks = np.ones_like(lum, dtype=bool)
+    for dy in range(-nms_radius, nms_radius + 1):
+        for dx in range(-nms_radius, nms_radius + 1):
+            if dy == 0 and dx == 0:
+                continue
+            neigh = padded[nms_radius + dy : nms_radius + dy + h, nms_radius + dx : nms_radius + dx + w]
+            peaks &= lum >= neigh
+    thr = np.percentile(lum, p_hi)
+    ys, xs = np.where(peaks & (lum >= thr))
+    overlays: List[dict] = []
+    for rank, (py, px) in enumerate(zip(ys, xs), start=1):
+        y1, y2 = max(0, py - 1), min(h - 1, py + 1)
+        x1, x2 = max(0, px - 1), min(w - 1, px + 1)
+        wy1, wy2 = max(0, y1 - context_pad), min(h - 1, y2 + context_pad)
+        wx1, wx2 = max(0, x1 - context_pad), min(w - 1, x2 + context_pad)
+        window = lum[wy1 : wy2 + 1, wx1 : wx2 + 1]
+        boxmask = np.zeros_like(window, dtype=bool)
+        boxmask[(y1 - wy1) : (y2 - wy1 + 1), (x1 - wx1) : (x2 - wx1 + 1)] = True
+        surround_vals = window[~boxmask]
+        surround_mean = float(surround_vals.mean()) if surround_vals.size else float(lum.mean())
+        peak_lum = float(lum[py, px])
+        contrast = max(0.0, peak_lum - surround_mean)
+        overlays.append(
+            {
+                "overlay_id": rank,
+                "center_row": int(py + 1),
+                "center_col": int(px + 1),
+                "y1": int(y1 + 1),
+                "x1": int(x1 + 1),
+                "y2": int(y2 + 1),
+                "x2": int(x2 + 1),
+                "height": int(y2 - y1 + 1),
+                "width": int(x2 - x1 + 1),
+                "contrast": float(contrast),
+                "peak_lum": float(peak_lum),
+                "area": int((y2 - y1 + 1) * (x2 - x1 + 1)),
+            }
+        )
+    return overlays

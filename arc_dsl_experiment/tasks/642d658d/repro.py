@@ -82,7 +82,57 @@ def main():
         json.dump(stats, f, indent=2, sort_keys=True)
     print(f"Wrote {out_stats}")
 
+    # Emit detailed stats for overlays/predicate per example
+    def per_example_details(task):
+        details = {"train": [], "test": []}
+        # absolute detector to sync with OCaml
+        for ex in task["train"]:
+            g = ex["input"]
+            ovs = dsl.detect_bright_overlays(g)
+            entries = []
+            H, W = len(g), len(g[0])
+            for ov in ovs:
+                r, c = ov["center_row"], ov["center_col"]
+                vals = [g[r-2][c-1], g[r][c-1], g[r-1][c-2], g[r-1][c]] if (1<=r-1<H-1 and 1<=c-1<W-1) else []
+                col = vals[0] if len(vals)==4 and len(set(vals))==1 and vals[0]!=0 else None
+                entries.append(((r, c), col))
+            entries.sort(key=lambda x: (x[0][0], x[0][1]))
+            centers = [[r,c] for (r,c),_ in entries]
+            cols = [col for _,col in entries if col is not None]
+            details["train"].append({
+                "centers": centers,
+                "uniform_cross_colors": cols,
+                "pred": (min(cols) if cols else 0),
+                "gt": ex["output"][0][0],
+            })
+        for ex in task["test"]:
+            g = ex["input"]
+            ovs = dsl.detect_bright_overlays(g)
+            entries = []
+            H, W = len(g), len(g[0])
+            for ov in ovs:
+                r, c = ov["center_row"], ov["center_col"]
+                vals = [g[r-2][c-1], g[r][c-1], g[r-1][c-2], g[r-1][c]] if (1<=r-1<H-1 and 1<=c-1<W-1) else []
+                col = vals[0] if len(vals)==4 and len(set(vals))==1 and vals[0]!=0 else None
+                entries.append(((r, c), col))
+            entries.sort(key=lambda x: (x[0][0], x[0][1]))
+            centers = [[r,c] for (r,c),_ in entries]
+            cols = [col for _,col in entries if col is not None]
+            details["test"].append({
+                "centers": centers,
+                "uniform_cross_colors": cols,
+            })
+        return details
+
+    py_details = per_example_details(task)
+    with open(HERE / "python_stats.json", "w", encoding="utf-8") as f:
+        json.dump(py_details, f, separators=(",", ":"), sort_keys=False)
+        f.write("\n")
+    print("Wrote", HERE / "python_stats.json")
+
     # Render pictures (train + test)
+    import matplotlib
+    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
 
@@ -103,11 +153,16 @@ def main():
         overlays = dsl.detect_bright_overlays(g.tolist())
         H, W = g.shape
         fig, axes = plt.subplots(1, 2, figsize=(12, 8), dpi=150)
+        fig.canvas.toolbar_visible = False
+        fig.canvas.header_visible = False
+        fig.canvas.footer_visible = False
         ax = axes[0]
         ax.imshow(rgb, interpolation='nearest')
         ax.set_title(title, fontsize=12)
         ax.set_xticks([]); ax.set_yticks([])
-        for ov in overlays:
+        # deterministic draw order: sort overlays by (center_row, center_col)
+        overlays_sorted = sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"]))
+        for ov in overlays_sorted:
             y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
             rect = Rectangle((x1 - 0.5, y1 - 0.5), (x2 - x1 + 1), (y2 - y1 + 1), fill=False, linewidth=1.5, edgecolor='yellow')
             ax.add_patch(rect)
@@ -118,7 +173,7 @@ def main():
         ax2.imshow(tile, interpolation='nearest')
         ax2.set_title(f"Predicted Color: {int(pred_color)}", fontsize=12)
         ax2.set_xticks([]); ax2.set_yticks([])
-        plt.tight_layout(); plt.savefig(out_path, bbox_inches="tight"); plt.close(fig); return out_path
+        plt.tight_layout(); plt.savefig(out_path, bbox_inches="tight", metadata={}); plt.close(fig); return out_path
 
     # Train pics
     images_dir = HERE / "images"
