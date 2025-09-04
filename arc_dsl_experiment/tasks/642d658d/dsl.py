@@ -13,7 +13,6 @@
 from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic
 import numpy as np
-from functools import lru_cache
 from vision import (
     PALETTE as VISION_PALETTE,
     grid_to_luminance as vision_grid_to_luminance,
@@ -71,8 +70,6 @@ class Pipeline:
             cur = op.apply(cur)  # type: ignore[arg-type]
         return cur
 # ===================== Palette & Luminance =====================
-PALETTE = VISION_PALETTE
-def _default_palette(): return VISION_PALETTE.copy()
 def grid_to_luminance(g: np.ndarray) -> np.ndarray:
     return vision_grid_to_luminance(g)
 # ===================== Overlay Extractor (from user) =====================
@@ -201,11 +198,7 @@ def bright_overlay_cross_mode(g: np.ndarray, overlays: List[dict]) -> int:
     cnt = Counter(colors); m = max(cnt.values())
     cands = [k for k,v in cnt.items() if v==m]
     return int(min(cands))
-# Fast-first: cheap high-percentile peaks + uniform cross agreement
-def _fast_uniform_cross_color_if_agree(g: np.ndarray):
-    return None
 # Composed program body used in abstraction space: preop |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor.
-# Uses a fast-first path (cheap local-max selector) then falls back to full overlays (README_clean.md §2.5, §4).
 def predict_bright_overlay_uniform_cross(grid: List[List[int]]) -> int:
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
