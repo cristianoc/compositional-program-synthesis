@@ -309,3 +309,9 @@ Expected console (matches Python):
 Notes:
 - The OCaml implementation mirrors the pipeline at a high level and is suitable for perf exploration. For behavioral equivalence across edge cases, port robust z-scores and component growth from `vision.py`.
 
+### Verify Python/OCaml agreement
+Run the checker to generate both stats and assert they match (centers, colors, gt):
+```bash
+python3 check_agreement.py && echo OK || echo FAIL
+```
+
