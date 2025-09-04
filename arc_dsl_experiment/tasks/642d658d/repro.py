@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 
 
-import json, time, numpy as np
+import json, time, numpy as np, os
 from importlib import reload
 import sys
 from pathlib import Path
@@ -161,6 +161,8 @@ def main():
     print("Wrote", HERE / "pattern_stats.json")
 
     # Render pictures (train + test)
+    # Attempt to make PNG outputs reproducible
+    os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -211,7 +213,9 @@ def main():
         ax2.imshow(tile, interpolation='nearest')
         ax2.set_title(f"Predicted Color: {int(pred_color)}", fontsize=12)
         ax2.set_xticks([]); ax2.set_yticks([])
-        plt.tight_layout(); plt.savefig(out_path, bbox_inches="tight", metadata={}); plt.close(fig); return out_path
+        # Use fixed metadata to avoid time stamps or varying text chunks in PNG
+        meta = {"Date": "1970-01-01T00:00:00", "Software": "arc-repro"}
+        plt.tight_layout(); plt.savefig(out_path, bbox_inches="tight", metadata=meta); plt.close(fig); return out_path
 
     # Train pics
     images_dir = HERE / "images"
