@@ -108,140 +108,31 @@ def main():
         json.dump(stats, f, indent=2, sort_keys=True)
     print(f"Wrote {out_stats}")
 
-    # Emit detailed stats for overlays/predicate per example
+    # Emit simplified per-example stats (pattern centers only)
     def per_example_details(task):
         details = {"train": [], "test": []}
-        # absolute detector to sync with OCaml; plus compare with pattern abstraction
+        def centers_of(ovs):
+            return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
         for ex in task["train"]:
             g = ex["input"]
-            ovs = dsl.detect_overlays(g, kind="cross3_yellow")
-            # pattern overlays
-            ovs_h3 = dsl.detect_overlays(g, kind="h3_yellow")
-            ovs_v3 = dsl.detect_overlays(g, kind="v3_yellow")
-            ovs_cross3 = dsl.detect_overlays(g, kind="cross3_yellow")
-            entries = []
-            H, W = len(g), len(g[0])
-            for ov in ovs:
-                r, c = ov["center_row"], ov["center_col"]
-                vals = [g[r-2][c-1], g[r][c-1], g[r-1][c-2], g[r-1][c]] if (1<=r-1<H-1 and 1<=c-1<W-1) else []
-                col = vals[0] if len(vals)==4 and len(set(vals))==1 and vals[0]!=0 else None
-                entries.append(((r, c), col))
-            entries.sort(key=lambda x: (x[0][0], x[0][1]))
-            centers = [[r,c] for (r,c),_ in entries]
-            cols = [col for _,col in entries if col is not None]
-            # subset/equality checks for centers
-            def centers_of(ovs):
-                return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
-            centers_abs = centers_of(ovs)
-            centers_h3 = centers_of(ovs_h3)
-            centers_v3 = centers_of(ovs_v3)
-            centers_cross3 = centers_of(ovs_cross3)
-            # filter ABS centers by local pattern predicate
-            def is_h3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=cc-1 and cc+1<W and 0<=rr<H:
-                    a, b, c3 = g[rr][cc-1], g[rr][cc], g[rr][cc+1]
-                    return a == b == c3 != 0
-                return False
-            def is_v3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=rr-1 and rr+1<H and 0<=cc<W:
-                    a, b, c3 = g[rr-1][cc], g[rr][cc], g[rr+1][cc]
-                    return a == b == c3 != 0
-                return False
-            def is_square3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=rr-1 and rr+1<H and 0<=cc-1 and cc+1<W:
-                    block = [g[rr-1][cc-1], g[rr-1][cc], g[rr-1][cc+1],
-                             g[rr][cc-1],   g[rr][cc],   g[rr][cc+1],
-                             g[rr+1][cc-1], g[rr+1][cc], g[rr+1][cc+1]]
-                    return len(set(block))==1 and block[0]!=0
-                return False
-            abs_h3 = sorted([xy for xy in centers_abs if is_h3_center(*xy)])
-            abs_v3 = sorted([xy for xy in centers_abs if is_v3_center(*xy)])
-            abs_square3 = sorted([xy for xy in centers_abs if is_square3_center(*xy)])
-            def subset(a,b):
-                sb = set(map(tuple,a))
-                bb = set(map(tuple,b))
-                return sb.issubset(bb)
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3_yellow"))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3_yellow"))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3_yellow"))
             details["train"].append({
-                "centers": centers,
-                "uniform_cross_colors": cols,
-                "pred": (min(cols) if cols else 0),
-                "gt": ex["output"][0][0],
-                "centers_abs": centers_abs,
+                "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
                 "centers_cross3": centers_cross3,
-                "abs_h3": abs_h3,
-                "abs_v3": abs_v3,
-                "abs_square3": abs_square3,
-                "h3_equal_abs_h3": centers_h3 == abs_h3,
-                "v3_equal_abs_v3": centers_v3 == abs_v3,
-                "cross3_equal_abs_cross3": centers_cross3 == abs_square3,  # compare against 3x3 box-filtered abs
             })
         for ex in task["test"]:
             g = ex["input"]
-            ovs = dsl.detect_overlays(g, kind="cross3_yellow")
-            ovs_h3 = dsl.detect_overlays(g, kind="h3_yellow")
-            ovs_v3 = dsl.detect_overlays(g, kind="v3_yellow")
-            ovs_cross3 = dsl.detect_overlays(g, kind="cross3_yellow")
-            entries = []
-            H, W = len(g), len(g[0])
-            for ov in ovs:
-                r, c = ov["center_row"], ov["center_col"]
-                vals = [g[r-2][c-1], g[r][c-1], g[r-1][c-2], g[r-1][c]] if (1<=r-1<H-1 and 1<=c-1<W-1) else []
-                col = vals[0] if len(vals)==4 and len(set(vals))==1 and vals[0]!=0 else None
-                entries.append(((r, c), col))
-            entries.sort(key=lambda x: (x[0][0], x[0][1]))
-            centers = [[r,c] for (r,c),_ in entries]
-            cols = [col for _,col in entries if col is not None]
-            def centers_of(ovs):
-                return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
-            centers_abs = centers_of(ovs)
-            centers_h3 = centers_of(ovs_h3)
-            centers_v3 = centers_of(ovs_v3)
-            centers_cross3 = centers_of(ovs_cross3)
-            def is_h3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=cc-1 and cc+1<W and 0<=rr<H:
-                    a, b, c3 = g[rr][cc-1], g[rr][cc], g[rr][cc+1]
-                    return a == b == c3 != 0
-                return False
-            def is_v3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=rr-1 and rr+1<H and 0<=cc<W:
-                    a, b, c3 = g[rr-1][cc], g[rr][cc], g[rr+1][cc]
-                    return a == b == c3 != 0
-                return False
-            def is_square3_center(r, c):
-                rr, cc = r-1, c-1
-                if 0<=rr-1 and rr+1<H and 0<=cc-1 and cc+1<W:
-                    block = [g[rr-1][cc-1], g[rr-1][cc], g[rr-1][cc+1],
-                             g[rr][cc-1],   g[rr][cc],   g[rr][cc+1],
-                             g[rr+1][cc-1], g[rr+1][cc], g[rr+1][cc+1]]
-                    return len(set(block))==1 and block[0]!=0
-                return False
-            abs_h3 = sorted([xy for xy in centers_abs if is_h3_center(*xy)])
-            abs_v3 = sorted([xy for xy in centers_abs if is_v3_center(*xy)])
-            abs_square3 = sorted([xy for xy in centers_abs if is_square3_center(*xy)])
-            def subset(a,b):
-                sb = set(map(tuple,a))
-                bb = set(map(tuple,b))
-                return sb.issubset(bb)
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3_yellow"))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3_yellow"))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3_yellow"))
             details["test"].append({
-                "centers": centers,
-                "uniform_cross_colors": cols,
-                "centers_abs": centers_abs,
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
                 "centers_cross3": centers_cross3,
-                "abs_h3": abs_h3,
-                "abs_v3": abs_v3,
-                "abs_square3": abs_square3,
-                "h3_equal_abs_h3": centers_h3 == abs_h3,
-                "v3_equal_abs_v3": centers_v3 == abs_v3,
-                "cross3_equal_abs_cross3": centers_cross3 == abs_square3,
             })
         return details
 
