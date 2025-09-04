@@ -17,8 +17,7 @@ from functools import lru_cache
 from vision import (
     PALETTE as VISION_PALETTE,
     grid_to_luminance as vision_grid_to_luminance,
-    detect_bright_overlays as vision_detect_bright_overlays,
-    fast_uniform_cross_color_if_agree as vision_fast_uniform_cross_color_if_agree,
+    detect_bright_overlays_absolute as vision_detect_bright_overlays,
 )
 # ===================== Typed, compositional DSL =====================
 # Minimal typed-DSL scaffolding to make composition explicit and extensible.
@@ -83,7 +82,8 @@ def detect_bright_overlays(
     palette: Optional[Dict[int, Tuple[int,int,int]]] = None,
     **kwargs,
 ) -> List[dict]:
-    return vision_detect_bright_overlays(grid, palette, **kwargs)
+    # palette/kwargs ignored for the absolute detector
+    return vision_detect_bright_overlays(grid)
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
@@ -203,16 +203,12 @@ def bright_overlay_cross_mode(g: np.ndarray, overlays: List[dict]) -> int:
     return int(min(cands))
 # Fast-first: cheap high-percentile peaks + uniform cross agreement
 def _fast_uniform_cross_color_if_agree(g: np.ndarray):
-    return vision_fast_uniform_cross_color_if_agree(g)
+    return None
 # Composed program body used in abstraction space: preop |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor.
 # Uses a fast-first path (cheap local-max selector) then falls back to full overlays (README_clean.md §2.5, §4).
 def predict_bright_overlay_uniform_cross(grid: List[List[int]]) -> int:
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
-    # Fast-first check preserved for behavior parity
-    fast = _fast_uniform_cross_color_if_agree(gstate.grid)
-    if fast is not None:
-        return int(fast)
     pipeline = Pipeline([
         OpBrightOverlayIdentity(),
         OpUniformCrossPattern(),

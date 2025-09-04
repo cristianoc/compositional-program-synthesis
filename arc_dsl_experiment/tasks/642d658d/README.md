@@ -296,3 +296,20 @@ Tracked outputs:
 - `images/overlay_train_*.png`, `images/overlay_test.png`
 - `repro_stats.json` (node counts, programs_found, tries_to_first, timing)
 
+## OCaml port (optional)
+
+Build and run:
+```bash
+cd ocaml
+dune build
+dune exec overlay_arc
+```
+
+Expected console (matches Python):
+- Node counts: `G core nodes: 1005`, `Overlay+predicate nodes: 201`
+- Programs found: `identity`, `perm_192`
+- Stats: ABS tries_to_first=1; time depends on machine (OCaml run on this machine: ~0.33s ABS loop).
+
+Notes:
+- The OCaml implementation mirrors the pipeline at a high level and is suitable for perf exploration. For behavioral equivalence across edge cases, port robust z-scores and component growth from `vision.py`.
+
