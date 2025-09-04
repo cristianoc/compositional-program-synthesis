@@ -148,6 +148,20 @@ This structure makes it straightforward to add new overlay-level primitives (e.g
 - `OpUniformCrossPattern: OverlayContext → ColorState`
   - Checks uniform 4-neighborhood at overlay centers; emits agreed color (fallback to mode if needed).
 
+Implementation note: The visual routines (palette, luminance, overlay detection, fast-first helpers) are factored into `vision.py`. The typed DSL and enumeration live in `dsl.py` and import from `vision.py`.
+
+### 2.7 Why separate “vision” from “logic” (perception vs. reasoning)
+We factor perceptual operations (in `vision.py`) from symbolic/logic operations (in `dsl.py`) to mirror the distinction between early visual processing and downstream reasoning.
+
+- **Perception (vision.py):** luminance, salience, non‑maximum suppression, local contrast, and overlay extraction. These are low‑level, metric operations on arrays; they provide anchors/object‑like tokens and summary stats.
+- **Reasoning (dsl.py):** typed, symbolic predicates and programs over those tokens (e.g., `UniformCrossPattern: OverlayContext → ColorState`), plus search/enumeration. These are discrete/logical and compose via the typed pipeline.
+
+Benefits:
+- **Invariance and safety:** vision code centralizes palette/luminance handling so logic stays label‑agnostic and robust to color relabeling.
+- **Composability:** typed boundaries (`GridState → OverlayContext → ColorState`) make it easy to add new perceptual extractors or new logical predicates independently.
+- **Performance & caching:** perceptual results (overlays/stats) can be cached/reused across logical variants; logic can short‑circuit without re‑running detection.
+- **Scientific alignment:** mirrors current views of the visual cortex (perceptual feature extraction, grouping) feeding higher‑level reasoning modules, while allowing iterative abstraction–refinement across the interface.
+
 ## 3. Experimental Setup
 - Task: The 3-train ARC puzzle (1 test). Train outputs are single colors.
 - Spaces:
