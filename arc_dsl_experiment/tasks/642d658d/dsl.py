@@ -1,3 +1,14 @@
+# -----------------------------------------------------------------------------
+# Overlay Abstraction Experiment Utilities
+# This module implements:
+#  • Overlay extractor: detect_bright_overlays  (README_clean.md §2.2, “Methods: Overlay extractor”)
+#  • Abstraction: BrightOverlayIdentity         (README_clean.md §2.3, identity + stored overlays)
+#  • Pattern predicate & predictor pipeline     (README_clean.md §2.3; §5 “Analysis”)
+#  • G core color rules incl. local-structure   (README_clean.md §2.4 “Extensions to G”)
+#  • Program enumeration & pretty-print helpers (README_clean.md §4 “Results”)
+# For numeric defaults of the detector, see README_clean.md: “Detector defaults (for reproducibility)”.
+# -----------------------------------------------------------------------------
+
 
 from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable
@@ -19,6 +30,7 @@ def grid_to_luminance(g: np.ndarray) -> np.ndarray:
     for k,(r,gc,b) in pal.items(): rgb[g==k] = (r,gc,b)
     return to_luminance(rgb)
 # ===================== Overlay Extractor (from user) =====================
+# See README_clean.md §2.2 for a high-level description and defaults; this function is the source of truth.
 def detect_bright_overlays(
     grid: Iterable[Iterable[int]],
     palette: Optional[Dict[int, Tuple[int,int,int]]] = None,
@@ -258,6 +270,8 @@ def _fast_uniform_cross_color_if_agree(g: np.ndarray):
     if not colors: return None
     if len(set(colors))==1: return int(colors[0])
     return None
+# Composed program body used in abstraction space: preop |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor.
+# Uses a fast-first path (cheap local-max selector) then falls back to full overlays (README_clean.md §2.5, §4).
 def predict_bright_overlay_uniform_cross(grid: List[List[int]]) -> int:
     g = np.asarray(grid, dtype=int)
     fast = _fast_uniform_cross_color_if_agree(g)
@@ -279,6 +293,8 @@ def apply_perm(g: np.ndarray, pmap: Dict[int,int]) -> np.ndarray:
     out = np.empty_like(g)
     for k,v in pmap.items(): out[g==k]=v
     return out
+# Builds (‘identity’ + N palette permutations) used as pre-ops in both spaces.
+# Note: In our run (seed=11, 200 preops) perm_192 was an identity mapping on used colors (README_clean.md, Note on perm_192).
 def build_preops_for_dataset(train_pairs: List[Tuple[np.ndarray,int]], num_preops: int = 200, seed: int = 11):
     preops: List[Tuple[str, Callable[[np.ndarray], np.ndarray]]] = []
     preops.append(("identity", identity))
@@ -381,6 +397,7 @@ COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("argmax_uniform_cross_color_count", sel_color_argmax_uniform_cross_color_count),
 ]
 # ===================== Enumeration & Printing =====================
+# Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
     preops = build_preops_for_dataset(train_pairs, num_preops=num_preops, seed=seed)
@@ -406,6 +423,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     programs_ABS = [f"{pre} |> BrightOverlayIdentity |> UniformCrossPattern |> OutputAgreedColor" for pre in valid_ABS]
     return {"G":{"nodes": total_G, "programs": programs_G},
             "ABS":{"nodes": total_ABS, "programs": programs_ABS}}
+# Pretty-prints the programs and node counts (README_clean.md §4).
 def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)
     print("=== Node counts ===")
