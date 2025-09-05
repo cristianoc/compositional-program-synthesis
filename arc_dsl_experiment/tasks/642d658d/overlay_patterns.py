@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Iterable, List, Literal
 
 import numpy as np
+from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
 
 
 PatternKind = Literal["h3", "v3", "cross3"]
@@ -67,16 +68,19 @@ def detect_pattern_overlays(
         # For this kind, we return immediately (no grouping by repeats)
         return overlays
     elif kind == "h3":
-        # One overlay per pixel of the given color that forms (x,color,x) with its horizontal neighbors
+        # Use generic schema mining to detect [X, color, X] horizontal windows
+        desired_schema = ("X", int(color), "X")
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
                     continue
-                if c-1 < 0 or c+1 >= W:
+                if c - 1 < 0 or c + 1 >= W:
                     continue
-                a, b = int(g[r, c-1]), int(g[r, c+1])
-                if a == b and a != 0:
-                    overlays.append(_emit_overlay(r, c, r, c-1, r, c+1, overlay_id))
+                triple = (int(g[r, c - 1]), int(g[r, c]), int(g[r, c + 1]))
+                schemas = gen_schemas_for_triple(triple)
+                # Preserve prior behavior: require non-zero flank color
+                if desired_schema in schemas and int(triple[0]) != 0:
+                    overlays.append(_emit_overlay(r, c, r, c - 1, r, c + 1, overlay_id))
                     overlay_id += 1
         return overlays
     elif kind == "v3":
