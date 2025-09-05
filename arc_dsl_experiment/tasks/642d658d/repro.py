@@ -206,14 +206,6 @@ def main():
         ax.set_xticks([]); ax.set_yticks([])
         overlays_sorted = sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"]))
         for ov in overlays_sorted:
-            if kind == "schema3x3":
-                rr = ov["center_row"] - 1
-                cc = ov["center_col"] - 1
-                # vertical arm (3 cells): from rr-1 to rr+1 at column cc
-                ax.add_line(Line2D([cc, cc], [rr - 1 - 0.5, rr + 1 + 0.5], color='yellow', linewidth=2.0))
-                # horizontal arm (3 cells): from cc-1 to cc+1 at row rr
-                ax.add_line(Line2D([cc - 1 - 0.5, cc + 1 + 0.5], [rr, rr], color='yellow', linewidth=2.0))
-            else:
                 y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
                 rect = Rectangle((x1 - 0.5, y1 - 0.5), (x2 - x1 + 1), (y2 - y1 + 1), fill=False, linewidth=1.5, edgecolor='yellow')
                 ax.add_patch(rect)
