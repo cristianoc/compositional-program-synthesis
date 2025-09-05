@@ -83,7 +83,7 @@ def detect_overlays(
     )
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["h3", "v3", "schema_nxn"]
-# Default n for schema3x3 (generalized n x n). Only set at top level; detection remains default.
+# Default n for schemanxn (generalized n x n). Only set at top level; detection remains default.
 WINDOW_SIZE_N: int = 3
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
