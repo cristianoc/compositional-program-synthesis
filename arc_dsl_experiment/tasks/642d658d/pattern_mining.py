@@ -314,7 +314,6 @@ if __name__ == "__main__":
 SignatureCell = Union[int, str]
 SignatureGrid = List[List[SignatureCell]]
 
-
 # ------------------------------ n x n Mining ----------------------------------
 
 
@@ -371,7 +370,20 @@ def format_nxn_pretty(sig: List[List[SignatureCell]]) -> str:
 
 
 # Extended: schema with variables (X, Y, ...) for positions that are always equal
-_VAR_TOKENS_3X3: Tuple[str, ...] = ("X", "Y", "Z", "U", "V", "W", "Q", "R", "S")
+VAR_TOKENS_GRID: Tuple[str, ...] = ("X", "Y", "Z", "U", "V", "W", "Q", "R", "S", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "T")
+
+def _var_token_for_index(idx: int) -> str:
+    """Return a variable token for the given index, scaling beyond base tokens.
+
+    Tokens cycle through VAR_TOKENS_GRID and add a numeric suffix when needed.
+    Example: X, Y, Z, ..., T, X1, Y1, Z1, ...
+    """
+    if idx < 0:
+        idx = 0
+    base_len = len(VAR_TOKENS_GRID)
+    suffix_num = idx // base_len
+    base_tok = VAR_TOKENS_GRID[idx % base_len]
+    return base_tok if suffix_num == 0 else f"{base_tok}{suffix_num}"
 
 
 def mine_nxn_schema_with_vars(
@@ -469,7 +481,7 @@ def mine_nxn_schema_with_vars(
     var_token_map: Dict[int, str] = {}
     next_var_idx = 0
     for comp in components:
-        tok = _VAR_TOKENS_3X3[min(next_var_idx, len(_VAR_TOKENS_3X3) - 1)]
+        tok = _var_token_for_index(next_var_idx)
         next_var_idx += 1
         for p in comp:
             i, j = divmod(p, window_size)
