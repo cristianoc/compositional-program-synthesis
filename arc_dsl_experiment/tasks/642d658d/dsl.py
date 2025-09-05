@@ -14,7 +14,6 @@ from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic, Union
 import numpy as np
 from overlay_patterns import detect_pattern_overlays
-from pattern_mining import format_3x3_signature
 # ===================== Typed, compositional DSL =====================
 # Minimal typed-DSL scaffolding to make composition explicit and extensible.
 # States capture the current representation; Operations convert between states.
@@ -112,73 +111,6 @@ def _gather_cross3_windows(task: Dict, color: int):
         for ex in task.get(split, []):
             collect_from_grid(ex["input"])
     return windows
-def cross3_schema_string_for_task(task: Dict, color: int) -> str:
-    wins = _gather_cross3_windows(task, color)
-    if not wins:
-        return "[]"
-    # Determine constants per position across windows
-    pos_vals: List[set[int]] = []
-    for i in range(3):
-        for j in range(3):
-            vals = {int(win[i, j]) for win in wins}
-            pos_vals.append(vals)
-    is_const = [len(s) == 1 for s in pos_vals]
-    const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
-    # Equality graph among non-constants
-    npos = 9
-    adj = [[False] * npos for _ in range(npos)]
-    for a in range(npos):
-        adj[a][a] = True
-    for a in range(npos):
-        if is_const[a]:
-            continue
-        ai, aj = divmod(a, 3)
-        for b in range(a + 1, npos):
-            if is_const[b]:
-                continue
-            bi, bj = divmod(b, 3)
-            equal_all = True
-            for win in wins:
-                if int(win[ai, aj]) != int(win[bi, bj]):
-                    equal_all = False
-                    break
-            if equal_all:
-                adj[a][b] = adj[b][a] = True
-    # Connected components of equal positions
-    visited = [False] * npos
-    components: List[List[int]] = []
-    for v in range(npos):
-        if visited[v] or is_const[v]:
-            continue
-        # explore neighbors
-        stack = [v]
-        visited[v] = True
-        comp = [v]
-        while stack:
-            u = stack.pop()
-            for w in range(npos):
-                if not visited[w] and adj[u][w]:
-                    visited[w] = True
-                    stack.append(w)
-                    comp.append(w)
-        if len(comp) >= 2:
-            components.append(sorted(comp))
-    # Build schema grid with constants, variables, and '*'
-    schema: List[List[Union[int, str]]] = [["*" for _ in range(3)] for _ in range(3)]
-    for p in range(npos):
-        if is_const[p]:
-            i, j = divmod(p, 3)
-            cv_opt = const_val[p]
-            schema[i][j] = int(cv_opt) if cv_opt is not None else "*"
-    var_tokens = ("X", "Y", "Z", "U", "V", "W")
-    next_var = 0
-    for comp in components:
-        tok = var_tokens[min(next_var, len(var_tokens) - 1)]
-        next_var += 1
-        for p in comp:
-            i, j = divmod(p, 3)
-            schema[i][j] = tok
-    return format_3x3_signature(schema)
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
