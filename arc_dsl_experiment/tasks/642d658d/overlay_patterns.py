@@ -5,9 +5,9 @@ import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
 
 
-PatternKind = Literal["h3", "v3", "schema3x3"]
+PatternKind = Literal["h3", "v3", "schema_nxn"]
 
-# (No per-grid printing; 3x3 mining and pretty printers are available in pattern_mining if needed.)
+# (No per-grid printing; n×n mining and pretty printers are available in pattern_mining if needed.)
 
 
 def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
@@ -50,15 +50,15 @@ def detect_pattern_overlays(
 
     - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
     - kind="v3": emit one overlay per center matching (x, color, x) vertically.
-    - kind="schema3x3": emit one overlay per pixel of the given color with a 3x3 box.
+    - kind="schema_nxn": emit one overlay per pixel of the given color with an n×n box (default n=3).
     """
     g = _to_np_grid(grid)
     H, W = g.shape
     overlays: List[dict] = []
     overlay_id = 1
 
-    if kind == "schema3x3":
-        # One overlay per pixel of the given color. Box is 3x3 clipped to grid.
+    if kind == "schema_nxn":
+        # One overlay per pixel of the given color. Box is n×n clipped to grid (n defaults to 3).
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):

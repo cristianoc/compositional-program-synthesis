@@ -83,7 +83,9 @@ def detect_overlays(
         min_repeats=min_repeats,
     )
 # Pattern kinds considered during search/enumeration
-PATTERN_KINDS: List[str] = ["h3", "v3", "schema3x3"]
+PATTERN_KINDS: List[str] = ["h3", "v3", "schema_nxn"]
+# Default n for schema3x3 (generalized n x n). Only set at top level; detection remains default.
+WINDOW_SIZE_N: int = 3
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
@@ -95,7 +97,7 @@ def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
             if len(ovs) == 0:
                 return False
     return True
-# Build a consensus 3x3 signature across all examples for schema3x3
+# Build a consensus n×n signature across all examples for schema_nxn (n defaults to 3)
 def _gather_cross3_windows(task: Dict, color: int):
     import numpy as np
     windows = []
@@ -210,7 +212,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "schema3x3", color: Optional[int] = None):
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "schema_nxn", color: Optional[int] = None):
         self.absx = absx or PatternOverlayExtractor()
         self.kind = kind
         if color is None:
@@ -242,7 +244,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         #  - h3: for each overlay center at selected color, check horizontal flanks (x,c,x);
         #        collect the flank color x when uniform and nonzero, then return the mode (tie→min).
         #  - v3: analogous, but on vertical flanks above/below the center.
-        #  - schema3x3: fallback to uniform cross color around overlay centers.
+        #  - schema_nxn: fallback to uniform cross color around overlay centers.
         # If no kind-specific evidence is found, falls back to the most frequent valid cross color at centers.
         g = state.grid
         from collections import Counter
@@ -265,7 +267,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
                     a, b = int(g[r-1, c]), int(g[r+1, c])
                     if a == b and a != 0:
                         flank_colors.append(a)
-            elif kind == "schema3x3":
+            elif kind == "schema_nxn":
                 # handled by fallback below (uniform cross color around centers)
                 pass
         if flank_colors:
@@ -310,7 +312,7 @@ def predict_bright_overlay_uniform_cross(grid: List[List[int]], color: int) -> i
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
     pipeline = Pipeline([
-        OpBrightOverlayIdentity(kind="schema3x3", color=color),
+        OpBrightOverlayIdentity(kind="schema_nxn", color=color),
         OpUniformPatternPredicate(),
     ])
     out = pipeline.run(gstate)
@@ -437,9 +439,8 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         extra = ""
         if kind in ("h3", "v3"):
             extra = f", pattern=[X, {int(c)}, X]"
-        elif kind == "schema3x3":
-            sig = cross3_schema_string_for_task(task, c)
-            extra = f", pattern={sig}"
+        elif kind == "schema_nxn":
+            extra = f", n={WINDOW_SIZE_N}"
         programs_ABS.append(
             f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
         )
