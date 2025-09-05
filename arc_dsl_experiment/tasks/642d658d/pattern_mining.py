@@ -291,12 +291,48 @@ if __name__ == "__main__":
     demo()
 
 # ------------------------------ 3x3 Mining -----------------------------------
-# We mine a single 3x3 signature over all full 3x3 windows centered on a given color.
+# We mine a single 3×3 signature over all full 3×3 windows centered on a given color.
 # Rule: for each of the 9 positions, if all windows agree on the same constant value,
 # keep that constant; otherwise emit the wildcard symbol "*" (meaning "anything").
 
 SignatureCell = Union[int, str]
 Signature3x3 = List[List[SignatureCell]]
+
+
+# ------------------------------ n x n Mining ----------------------------------
+# Generic n x n versions (n odd ≥ 1). 3x3 wrappers above remain for convenience.
+
+def mine_nxn_signature(
+    G: Sequence[Sequence[int]],
+    *,
+    center_color: int,
+    window_size: int,
+    require_full_window: bool = True,
+) -> Optional[List[List[SignatureCell]]]:
+    import numpy as np
+    if window_size % 2 == 0 or window_size < 1:
+        raise ValueError("window_size must be odd and >= 1")
+    g = np.asarray(G, dtype=int)
+    H, W = g.shape
+    r2 = window_size // 2
+    windows: List[np.ndarray] = []
+    for r in range(r2, H - r2):
+        for c in range(r2, W - r2):
+            if int(g[r, c]) != int(center_color):
+                continue
+            win = g[r - r2 : r + r2 + 1, c - r2 : c + r2 + 1]
+            if require_full_window and (win.shape != (window_size, window_size)):
+                continue
+            windows.append(win.copy())
+    if not windows:
+        return None
+    sig: List[List[SignatureCell]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
+    for i in range(window_size):
+        for j in range(window_size):
+            vals = {int(win[i, j]) for win in windows}
+            if len(vals) == 1:
+                sig[i][j] = int(next(iter(vals)))
+    return sig
 
 
 def mine_3x3_signature(
@@ -308,7 +344,7 @@ def mine_3x3_signature(
     import numpy as np
     g = np.asarray(G, dtype=int)
     H, W = g.shape
-    # collect full 3x3 windows centered on the specified color
+    # collect full 3×3 windows centered on the specified color
     windows: List[np.ndarray] = []
     for r in range(1, H - 1):
         for c in range(1, W - 1):
@@ -347,54 +383,72 @@ def format_3x3_pretty(sig: Signature3x3) -> str:
     lines = ["[ " + " ".join(cell(x) for x in row) + " ]" for row in sig]
     return "\n" + "\n".join(lines)
 
-# Extended: 3x3 schema with variables (X, Y, ...) for positions that are always equal
+def format_nxn_signature(sig: List[List[SignatureCell]]) -> str:
+    def cell(x: SignatureCell) -> str:
+        return str(x)
+    rows = ["[" + ", ".join(cell(x) for x in row) + "]" for row in sig]
+    return "[" + ", ".join(rows) + "]"
+
+
+def format_nxn_pretty(sig: List[List[SignatureCell]]) -> str:
+    def cell(x: SignatureCell) -> str:
+        return str(x)
+    lines = ["[ " + " ".join(cell(x) for x in row) + " ]" for row in sig]
+    return "\n" + "\n".join(lines)
+
+
+# Extended: schema with variables (X, Y, ...) for positions that are always equal
 _VAR_TOKENS_3X3: Tuple[str, ...] = ("X", "Y", "Z", "U", "V", "W", "Q", "R", "S")
 
 
-def mine_3x3_schema_with_vars(
+def mine_nxn_schema_with_vars(
     G: Sequence[Sequence[int]],
     *,
     center_color: int,
+    window_size: int,
     require_full_window: bool = True,
-) -> Optional[Signature3x3]:
+) -> Optional[List[List[SignatureCell]]]:
     import numpy as np
     g = np.asarray(G, dtype=int)
     H, W = g.shape
+    if window_size % 2 == 0 or window_size < 1:
+        raise ValueError("window_size must be odd and >= 1")
+    r2 = window_size // 2
     windows: List[np.ndarray] = []
-    for r in range(1, H - 1):
-        for c in range(1, W - 1):
+    for r in range(r2, H - r2):
+        for c in range(r2, W - r2):
             if int(g[r, c]) != int(center_color):
                 continue
-            win = g[r - 1 : r + 2, c - 1 : c + 2]
-            if require_full_window and (win.shape != (3, 3)):
+            win = g[r - r2 : r + r2 + 1, c - r2 : c + r2 + 1]
+            if require_full_window and (win.shape != (window_size, window_size)):
                 continue
             windows.append(win.copy())
     if not windows:
         return None
     # Determine constants per position across windows
     pos_vals: List[set[int]] = []
-    for i in range(3):
-        for j in range(3):
+    for i in range(window_size):
+        for j in range(window_size):
             vals = {int(win[i, j]) for win in windows}
             pos_vals.append(vals)
     is_const = [len(s) == 1 for s in pos_vals]
     const_val = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
 
     # Equality relation across positions for non-constants: always equal across all windows
-    npos = 9
+    npos = window_size * window_size
     adj = [[False] * npos for _ in range(npos)]
     for a in range(npos):
         adj[a][a] = True
-    def idx(i: int, j: int) -> int: return i * 3 + j
+    def idx(i: int, j: int) -> int: return i * window_size + j
     # Check pairwise equality across all windows for non-constant positions
     for a in range(npos):
         if is_const[a]:
             continue
-        ai, aj = divmod(a, 3)
+        ai, aj = divmod(a, window_size)
         for b in range(a + 1, npos):
             if is_const[b]:
                 continue
-            bi, bj = divmod(b, 3)
+            bi, bj = divmod(b, window_size)
             equal_all = True
             for win in windows:
                 if int(win[ai, aj]) != int(win[bi, bj]):
@@ -426,11 +480,11 @@ def mine_3x3_schema_with_vars(
             components.append(sorted(comp))
 
     # Assign variable tokens to components in scan order
-    sig: Signature3x3 = [["*" for _ in range(3)] for _ in range(3)]
+    sig: List[List[SignatureCell]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
     # Fill constants
     for p in range(npos):
         if is_const[p]:
-            i, j = divmod(p, 3)
+            i, j = divmod(p, window_size)
             sig[i][j] = int(const_val[p])  # type: ignore[arg-type]
     # Map position to var token
     var_token_map: Dict[int, str] = {}
@@ -439,11 +493,20 @@ def mine_3x3_schema_with_vars(
         tok = _VAR_TOKENS_3X3[min(next_var_idx, len(_VAR_TOKENS_3X3) - 1)]
         next_var_idx += 1
         for p in comp:
-            i, j = divmod(p, 3)
+            i, j = divmod(p, window_size)
             var_token_map[p] = tok
             sig[i][j] = tok
     # Leave remaining non-constant singles as '*'
     return sig
+
+
+def mine_3x3_schema_with_vars(
+    G: Sequence[Sequence[int]],
+    *,
+    center_color: int,
+    require_full_window: bool = True,
+) -> Optional[Signature3x3]:
+    return mine_nxn_schema_with_vars(G, center_color=center_color, window_size=3, require_full_window=require_full_window)  # type: ignore[return-value]
 
 
 def format_3x3_schema(sig: Signature3x3) -> str:

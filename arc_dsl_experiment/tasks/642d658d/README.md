@@ -22,7 +22,7 @@
 - Left: grid with overlays for each pattern kind.
   - `overlay_train_i.png`: h3 (horizontal `(x,c,x)` centers, for chosen color `c`)
   - `overlay_train_i_v.png`: v3 (vertical `(x,c,x)` centers, for chosen color `c`)
-  - `overlay_train_i_x.png`: schema3x3 (one overlay per pixel of color `c`; shown as a cross)
+  - `overlay_train_i_x.png`: schema_nxn (one overlay per pixel of color `c`; shown as a cross)
 - Right: predicted color.
 
 | Train 1 (GT=2) | Train 2 (GT=3) |
@@ -34,17 +34,17 @@
 | ![](images/overlay_train_3.png) | ![](images/overlay_test.png) |
 
 ## Abstract
-The `PatternOverlayExtractor` emits overlays for three explicit pattern kinds that are now color-parameterized: `h3` (interpreted as horizontal `(x,c,x)` with center color `c`), `v3` (vertical `(x,c,x)`), and `schema3x3` (one overlay per pixel of color `c`, mined 3×3 schema). A `UniformPatternPredicate` reads the local structure consistent with the pattern kind and outputs a single color. Program search enumerates pattern kinds × colors. On this task, multiple (kind, color) settings yield a correct solution.
+The `PatternOverlayExtractor` emits overlays for three explicit pattern kinds that are now color-parameterized: `h3` (interpreted as horizontal `(x,c,x)` with center color `c`), `v3` (vertical `(x,c,x)`), and `schema_nxn` (one overlay per pixel of color `c`, mined n×n schema; default n=3). A `UniformPatternPredicate` reads the local structure consistent with the pattern kind and outputs a single color. Program search enumerates pattern kinds × colors. On this task, multiple (kind, color) settings yield a correct solution.
 
 ## 1. Methods (pattern-only)
 
 - `PatternOverlayExtractor(kind=..., color=c)` with kinds:
   - `h3`: one overlay per center matching `(x,c,x)` horizontally (center color is `c`)
   - `v3`: one overlay per center matching `(x,c,x)` vertically (center color is `c`)
-  - `schema3x3`: one overlay per pixel of color `c` (drawn as a cross in the renderer)
+  - `schema_nxn`: one overlay per pixel of color `c` (drawn as a cross in the renderer)
 
 - `UniformPatternPredicate` (kind-aware):
-  - For `h3`, uses horizontal flanks; for `v3`, vertical flanks; for `schema3x3`, uniform cross color; falls back to cross-mode if needed.
+  - For `h3`, uses horizontal flanks; for `v3`, vertical flanks; for `schema_nxn`, uniform cross color; falls back to cross-mode if needed.
 
 - Program schema (abstraction space):
 ```
@@ -61,7 +61,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 - Programs found (abstraction):
   - `PatternOverlayExtractor(kind=h3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
   - `PatternOverlayExtractor(kind=v3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=schema3x3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=schema_nxn, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
 
 - Node counts (this run):
   - G core: 4
@@ -69,7 +69,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 
 ## Code layout
 
-- `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `schema3x3`.
+- `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `schema_nxn`.
 - `pattern_mining.py`: generic 1×3 schema miner used by `h3` and `v3` detection.
 - `dsl.py`: pipeline wiring, enumeration, and printing of programs.
 
