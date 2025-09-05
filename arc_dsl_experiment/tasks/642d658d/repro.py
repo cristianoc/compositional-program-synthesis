@@ -42,7 +42,7 @@ def main():
     # choose best colors per kind on train
     COLOR_H3 = _best_color_for_kind(task, "h3")
     COLOR_V3 = _best_color_for_kind(task, "v3")
-    COLOR_CROSS3 = _best_color_for_kind(task, "schema_nxn")
+    COLOR_CROSSn = _best_color_for_kind(task, "schema_nxn")
 
     # Enumerate and print programs (composed form)
     # Pretty print programs found in both spaces (README_clean.md §4):
@@ -77,7 +77,7 @@ def main():
             tried2 += 1
             ok=True
             for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_CROSS3)
+                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_CROSSn)
                 if y_pred != y:
                     ok=False; break
             if ok:
@@ -108,7 +108,7 @@ def main():
     # Test-set predictions (no GT in ARC test; we just report)
     gtest = np.array(task["test"][0]["input"], dtype=int)
     pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3", COLOR_V3)
-    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "schema_nxn", COLOR_CROSS3)
+    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "schema_nxn", COLOR_CROSSn)
     print(f"Test predictions: v3={pred_v3} schema_nxn={pred_cross3}")
 
     # Verify overlay counts for h3_yellow vs count of yellow pixels
@@ -136,22 +136,22 @@ def main():
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSS3))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSSn))
             details["train"].append({
                 "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
-                "centers_cross3": centers_cross3,
+                "centers_crossn": centers_crossn,
             })
         for ex in task["test"]:
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSS3))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSSn))
             details["test"].append({
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
-                "centers_cross3": centers_cross3,
+                "centers_crossn": centers_crossn,
             })
         return details
 
@@ -229,7 +229,7 @@ def main():
 
     for i, ex in enumerate(task["train"], start=1):
         g = np.array(ex["input"], dtype=int)
-        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_CROSS3)
+        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_CROSSn)
         render_grid_with_overlays(
             g,
             pred,
@@ -247,17 +247,17 @@ def main():
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: schema_nxn (color={COLOR_CROSS3}) (GT={int(ex['output'][0][0])})",
+            f"Train {i}: schema_nxn (color={COLOR_CROSSn}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}_x.png"),
-            kind="schema_nxn", color=COLOR_CROSS3,
+            kind="schema_nxn", color=COLOR_CROSSn,
         )
 
     # Test pic
     gtest = np.array(task["test"][0]["input"], dtype=int)
-    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_CROSS3)
+    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_CROSSn)
     render_grid_with_overlays(gtest, predt, f"Test: h3 (color={COLOR_H3})", str(images_dir / "overlay_test.png"), kind="h3", color=COLOR_H3)
     render_grid_with_overlays(gtest, predt, f"Test: v3 (color={COLOR_V3})", str(images_dir / "overlay_test_v.png"), kind="v3", color=COLOR_V3)
-    render_grid_with_overlays(gtest, predt, f"Test: schema_nxn (color={COLOR_CROSS3})", str(images_dir / "overlay_test_x.png"), kind="schema_nxn", color=COLOR_CROSS3)
+    render_grid_with_overlays(gtest, predt, f"Test: schema_nxn (color={COLOR_CROSSn})", str(images_dir / "overlay_test_x.png"), kind="schema_nxn", color=COLOR_CROSSn)
 
 if __name__ == "__main__":
     main()

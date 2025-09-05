@@ -96,21 +96,6 @@ def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
             if len(ovs) == 0:
                 return False
     return True
-# Build a consensus n×n signature across all examples for schema_nxn (n defaults to 3)
-def _gather_cross3_windows(task: Dict, color: int):
-    import numpy as np
-    windows = []
-    def collect_from_grid(g):
-        g = np.asarray(g, dtype=int)
-        H, W = g.shape
-        for r in range(1, H-1):
-            for c in range(1, W-1):
-                if int(g[r,c]) == int(color):
-                    windows.append(g[r-1:r+2, c-1:c+2].copy())
-    for split in ("train","test"):
-        for ex in task.get(split, []):
-            collect_from_grid(ex["input"])
-    return windows
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
