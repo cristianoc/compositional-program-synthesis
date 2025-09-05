@@ -210,7 +210,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "cross3", color: Optional[int] = None):
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "schema3x3", color: Optional[int] = None):
         self.absx = absx or PatternOverlayExtractor()
         self.kind = kind
         if color is None:
@@ -242,7 +242,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         #  - h3: for each overlay center at selected color, check horizontal flanks (x,c,x);
         #        collect the flank color x when uniform and nonzero, then return the mode (tie→min).
         #  - v3: analogous, but on vertical flanks above/below the center.
-        #  - cross3: fallback to uniform cross color around overlay centers.
+        #  - schema3x3: fallback to uniform cross color around overlay centers.
         # If no kind-specific evidence is found, falls back to the most frequent valid cross color at centers.
         g = state.grid
         from collections import Counter

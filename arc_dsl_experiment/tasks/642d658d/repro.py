@@ -69,7 +69,7 @@ def main():
                     if tries_first_G is None: tries_first_G = tried
         t1 = time.perf_counter()
 
-        # Abstraction (use best color for cross3 found on train)
+        # Abstraction (use best color for schema3x3 found on train)
         t2 = time.perf_counter()
         valid_ABS = []
         tried2 = 0; tries_first_ABS=None
