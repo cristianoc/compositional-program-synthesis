@@ -1,31 +1,13 @@
 from __future__ import annotations
-from typing import Iterable, List, Literal, Set
+from typing import Iterable, List, Literal
 
 import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
-from pattern_mining import (
-    mine_3x3_signature,
-    format_3x3_signature,
-    format_3x3_pretty,
-    mine_3x3_schema_with_vars,
-    format_3x3_schema,
-    format_3x3_schema_pretty,
-)
 
 
 PatternKind = Literal["h3", "v3", "schema3x3"]
 
-# Deduplicate schema3x3 prints per unique (grid,color) fingerprint in this process
-_printed_schema3x3: Set[str] = set()
-
-def _grid_fingerprint(g: np.ndarray, color: int) -> str:
-    import hashlib
-    h = hashlib.sha1()
-    h.update(g.shape[0].to_bytes(4, 'little'))
-    h.update(g.shape[1].to_bytes(4, 'little'))
-    h.update(g.astype(np.int16, copy=False).tobytes())
-    h.update(int(color).to_bytes(2, 'little'))
-    return h.hexdigest()
+# (No per-grid printing; 3x3 mining and pretty printers are available in pattern_mining if needed.)
 
 
 def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
