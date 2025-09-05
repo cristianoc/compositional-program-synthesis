@@ -13,7 +13,7 @@
 from __future__ import annotations
 from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic
 import numpy as np
-from pattern import detect_pattern_overlays
+from overlay_patterns import detect_pattern_overlays
 # ===================== Typed, compositional DSL =====================
 # Minimal typed-DSL scaffolding to make composition explicit and extensible.
 # States capture the current representation; Operations convert between states.
@@ -83,6 +83,16 @@ def detect_overlays(
     )
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["h3", "v3", "cross3"]
+# Optimization: pre-check that a pattern appears in all examples (train+test)
+def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
+    # task is ARC-like dict with "train" and "test" splits
+    for split in ("train", "test"):
+        for ex in task.get(split, []):
+            g = ex["input"]
+            ovs = detect_overlays(g, kind=kind, color=int(color))
+            if len(ovs) == 0:
+                return False
+    return True
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
@@ -116,7 +126,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "cross3", color: int = None):
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "cross3", color: Optional[int] = None):
         self.absx = absx or PatternOverlayExtractor()
         self.kind = kind
         if color is None:
@@ -184,7 +194,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
             return ColorState(int(color))
         return ColorState(int(bright_overlay_cross_mode(g, state.overlays)))
 def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
-    out=[]
+    out: List[Optional[int]] = []
     for ov in overlays:
         r = ov["center_row"]; c = ov["center_col"]
         vals = _cross_vals(g, r, c)
@@ -328,6 +338,9 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     valid_ABS: List[Tuple[str,int]] = []
     for kind in PATTERN_KINDS:
         for c in colors:
+            # Optimization: skip candidates that cannot work because pattern missing in some input
+            if not pattern_present_in_all_examples(task, kind, c):
+                continue
             ok=True
             for x,y in train_pairs:
                 if predict_with_pattern_kind(x.tolist(), kind, c) != y:
@@ -335,10 +348,14 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             if ok:
                 valid_ABS.append((kind, c))
     programs_G = [f"{cn}" for cn in valid_G]
-    programs_ABS = [
-        f"PatternOverlayExtractor(kind={kind}, color={c}) |> UniformPatternPredicate |> OutputAgreedColor"
-        for (kind, c) in valid_ABS
-    ]
+    programs_ABS = []
+    for (kind, c) in valid_ABS:
+        extra = ""
+        if kind == "h3":
+            extra = f", pattern=[X, {int(c)}, X]"
+        programs_ABS.append(
+            f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
+        )
     return {"G":{"nodes": total_G, "programs": programs_G},
             "ABS":{"nodes": total_ABS, "programs": programs_ABS}}
 # Pretty-prints the programs and node counts (README_clean.md §4).
@@ -376,6 +393,9 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     colors = list(range(1,10))
     for kind in PATTERN_KINDS:
         for c in colors:
+            # Optimization: skip candidates that cannot work because pattern missing in some input
+            if not pattern_present_in_all_examples(task, kind, c):
+                continue
             tried2+=1; ok=True
             for x,y in train_pairs:
                 if predict_with_pattern_kind(x.tolist(), kind, c) != y: ok=False; break
