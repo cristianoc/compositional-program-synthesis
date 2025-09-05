@@ -89,7 +89,6 @@ def detect_pattern_overlays(
         return overlays
     elif kind == "h3":
         # Use generic schema mining to detect [X, color, X] horizontal windows
-        desired_schema = ("X", int(color), "X")
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
@@ -99,13 +98,12 @@ def detect_pattern_overlays(
                 triple = (int(g[r, c - 1]), int(g[r, c]), int(g[r, c + 1]))
                 schemas = gen_schemas_for_triple(triple)
                 # Preserve prior behavior: require non-zero flank color
-                if desired_schema in schemas and int(triple[0]) != 0:
+                if ("X", int(color), "X") in schemas and int(triple[0]) != 0:
                     overlays.append(_emit_overlay(r, c, r, c - 1, r, c + 1, overlay_id))
                     overlay_id += 1
         return overlays
     elif kind == "v3":
         # Use generic schema mining to detect [X, color, X] on vertical triples
-        desired_schema = ("X", int(color), "X")
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
@@ -114,7 +112,7 @@ def detect_pattern_overlays(
                     continue
                 triple = (int(g[r - 1, c]), int(g[r, c]), int(g[r + 1, c]))
                 schemas = gen_schemas_for_triple(triple)
-                if desired_schema in schemas and int(triple[0]) != 0:
+                if ("X", int(color), "X") in schemas and int(triple[0]) != 0:
                     overlays.append(_emit_overlay(r, c, r - 1, c, r + 1, c, overlay_id))
                     overlay_id += 1
         return overlays
