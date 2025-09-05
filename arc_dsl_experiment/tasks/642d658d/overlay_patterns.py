@@ -61,15 +61,18 @@ def detect_pattern_overlays(
     if kind == "schema_nxn":
         # One overlay per pixel of the given color. Box is n×n clipped to grid.
         n = int(window_size) if window_size is not None else 3
-        if n % 2 == 0 or n < 1:
-            raise ValueError("window_size must be odd and >= 1")
-        r2 = n // 2
+        if n < 1:
+            raise ValueError("window_size must be >= 1")
+        # Asymmetric extents when n is even: the selected center pixel is included,
+        # with window spanning up/left by floor((n-1)/2) and down/right by floor(n/2).
+        up_left = (n - 1) // 2
+        down_right = n // 2
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
                     continue
-                y1 = max(0, r - r2); x1 = max(0, c - r2)
-                y2 = min(H - 1, r + r2); x2 = min(W - 1, c + r2)
+                y1 = max(0, r - up_left); x1 = max(0, c - up_left)
+                y2 = min(H - 1, r + down_right); x2 = min(W - 1, c + down_right)
                 overlays.append(_emit_overlay(r, c, y1, x1, y2, x2, overlay_id))
                 overlay_id += 1
         # (Printing of mined patterns has been disabled.)
@@ -105,4 +108,3 @@ def detect_pattern_overlays(
         return overlays
     else:
         raise ValueError(f"Unknown pattern kind: {kind}")
-

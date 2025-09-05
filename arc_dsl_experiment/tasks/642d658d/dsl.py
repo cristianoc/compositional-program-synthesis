@@ -103,17 +103,24 @@ def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
 def _gather_schema_windows(task: Dict, color: int, *, window_size: int) -> List[np.ndarray]:
     import numpy as np
     windows = []
-    if window_size % 2 == 0 or window_size < 1:
-        raise ValueError("window_size must be odd and >= 1")
-    r2 = window_size // 2
+    if window_size < 1:
+        raise ValueError("window_size must be >= 1")
+    up_left = (window_size - 1) // 2
+    down_right = window_size // 2
     def collect_from_grid(g):
         g = np.asarray(g, dtype=int)
         H, W = g.shape
         # Only collect full windows completely inside the grid
-        for r in range(r2, H - r2):
-            for c in range(r2, W - r2):
+        r_min = up_left
+        r_max = H - 1 - down_right
+        c_min = up_left
+        c_max = W - 1 - down_right
+        if r_min > r_max or c_min > c_max:
+            return
+        for r in range(r_min, r_max + 1):
+            for c in range(c_min, c_max + 1):
                 if int(g[r, c]) == int(color):
-                    windows.append(g[r-r2:r+r2+1, c-r2:c+r2+1].copy())
+                    windows.append(g[r-up_left:r+down_right+1, c-up_left:c+down_right+1].copy())
     for split in ("train","test"):
         for ex in task.get(split, []):
             collect_from_grid(ex["input"])
