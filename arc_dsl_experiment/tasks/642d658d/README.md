@@ -70,7 +70,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 ## Code layout
 
 - `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `cross3`.
-- `pattern_mining.py`: generic 1×3 schema miner used by `h3` detection.
+- `pattern_mining.py`: generic 1×3 schema miner used by `h3` and `v3` detection.
 - `dsl.py`: pipeline wiring, enumeration, and printing of programs.
 
 ## Reproducing

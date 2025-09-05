@@ -351,7 +351,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     programs_ABS = []
     for (kind, c) in valid_ABS:
         extra = ""
-        if kind == "h3":
+        if kind in ("h3", "v3"):
             extra = f", pattern=[X, {int(c)}, X]"
         programs_ABS.append(
             f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
