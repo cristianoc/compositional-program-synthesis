@@ -24,10 +24,22 @@ High-level API
 
 Lower-level helpers are exposed for custom workflows.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Sequence, Tuple, Union, Optional
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Sequence,
+    Tuple,
+    Union,
+    Optional,
+)
 from collections import Counter
 import math
 
@@ -39,12 +51,14 @@ Window = Tuple[Symbol, Symbol, Symbol]
 VAR_TOKENS: Tuple[str, str, str] = ("X", "Y", "Z")
 VAR_SET = set(VAR_TOKENS)
 
+
 # ------------------------------ Data Models --------------------------------
 @dataclass(frozen=True)
 class SchemaResult:
     schema: Schema
     supp: int
     rsupp: float
+
 
 @dataclass(frozen=True)
 class CommonSchema:
@@ -54,7 +68,9 @@ class CommonSchema:
     supp2: int
     rsupp2: float
 
+
 # ------------------------------ Core Utils ---------------------------------
+
 
 def is_var(tok: Symbol) -> bool:
     return isinstance(tok, str) and tok in VAR_SET
@@ -90,11 +106,13 @@ def extract_windows(G: Sequence[Sequence[Symbol]]) -> List[Window]:
             W.append((row[c], row[c + 1], row[c + 2]))
     return W
 
+
 # ------------------------- Schema Enumeration ------------------------------
 
 # For a mask (subset of {0,1,2}), we enumerate valid partitions (blocks of
 # equal-variable positions). We only allow a block if the triple has equal
 # symbols at those positions, so the resulting schema is satisfied by the triple.
+
 
 def _blocks_for_mask(mask: Tuple[int, ...]) -> List[List[Tuple[int, ...]]]:
     """Enumerate partitions of positions in mask. Partitions are lists of blocks
@@ -109,17 +127,17 @@ def _blocks_for_mask(mask: Tuple[int, ...]) -> List[List[Tuple[int, ...]]]:
     if len(m) == 2:
         i, j = m
         return [
-            [(i,), (j,)],   # different variables X, Y
-            [(i, j)],       # same variable X
+            [(i,), (j,)],  # different variables X, Y
+            [(i, j)],  # same variable X
         ]
     if len(m) == 3:
         i, j, k = m
         return [
             [(i,), (j,), (k,)],  # X, Y, Z
-            [(i, j), (k,)],      # X shared on i,j; Y on k
-            [(i, k), (j,)],      # X shared on i,k; Y on j
-            [(j, k), (i,)],      # X shared on j,k; Y on i
-            [(i, j, k)],         # all share X
+            [(i, j), (k,)],  # X shared on i,j; Y on k
+            [(i, k), (j,)],  # X shared on i,k; Y on j
+            [(j, k), (i,)],  # X shared on j,k; Y on i
+            [(i, j, k)],  # all share X
         ]
     raise ValueError("Mask larger than 3 not supported for 1x3 windows.")
 
@@ -172,6 +190,7 @@ def gen_schemas_for_triple(t: Window) -> List[Schema]:
     # Use a deterministic key that compares mixed types via string form
     return sorted(schemas, key=lambda S: tuple(str(x) for x in S))
 
+
 # -------------------------- Interestingness --------------------------------
 
 InterestingFn = Callable[[Schema, Dict[str, Any]], bool]
@@ -189,6 +208,7 @@ def has_equality(schema: Schema) -> bool:
 def default_interesting(schema: Schema, stats: Dict[str, Any]) -> bool:
     """Default: at least one constant AND at least one variable equality."""
     return has_constant(schema) and has_equality(schema)
+
 
 # --------------------------- Mining Pipeline --------------------------------
 def _structure_flags(schema: Schema) -> Dict[str, bool]:
@@ -246,20 +266,19 @@ def intersect(
     m1 = {r.schema: r for r in R1}
     m2 = {r.schema: r for r in R2}
     common: List[CommonSchema] = []
-    for S in sorted(set(m1.keys()) & set(m2.keys()), key=lambda S: tuple(str(x) for x in S)):
+    for S in sorted(
+        set(m1.keys()) & set(m2.keys()), key=lambda S: tuple(str(x) for x in S)
+    ):
         r1, r2 = m1[S], m2[S]
-        common.append(
-            CommonSchema(S, r1.supp, r1.rsupp, r2.supp, r2.rsupp)
-        )
+        common.append(CommonSchema(S, r1.supp, r1.rsupp, r2.supp, r2.rsupp))
     common.sort(key=lambda x: -(x.supp1 + x.supp2))
     return common
+
 
 # ---------------------------- Convenience -----------------------------------
 def format_schema(schema: Schema) -> str:
     """Stringify a schema like [X, yellow, X]."""
-    return "[{}]".format(
-        ", ".join(str(tok) for tok in schema)
-    )
+    return "[{}]".format(", ".join(str(tok) for tok in schema))
 
 
 def demo() -> None:
@@ -287,20 +306,17 @@ def demo() -> None:
             f"{format_schema(c.schema)}",
             f"(G1 {c.supp1}/{c.rsupp1:.2f}, G2 {c.supp2}/{c.rsupp2:.2f})",
         )
+
+
 if __name__ == "__main__":
     demo()
 
-# ------------------------------ 3x3 Mining -----------------------------------
-# We mine a single 3×3 signature over all full 3×3 windows centered on a given color.
-# Rule: for each of the 9 positions, if all windows agree on the same constant value,
-# keep that constant; otherwise emit the wildcard symbol "*" (meaning "anything").
-
 SignatureCell = Union[int, str]
-Signature3x3 = List[List[SignatureCell]]
+SignatureGrid = List[List[SignatureCell]]
 
 
 # ------------------------------ n x n Mining ----------------------------------
-# Generic n x n versions (n odd ≥ 1). 3x3 wrappers above remain for convenience.
+
 
 def mine_nxn_signature(
     G: Sequence[Sequence[int]],
@@ -310,6 +326,7 @@ def mine_nxn_signature(
     require_full_window: bool = True,
 ) -> Optional[List[List[SignatureCell]]]:
     import numpy as np
+
     if window_size % 2 == 0 or window_size < 1:
         raise ValueError("window_size must be odd and >= 1")
     g = np.asarray(G, dtype=int)
@@ -326,7 +343,9 @@ def mine_nxn_signature(
             windows.append(win.copy())
     if not windows:
         return None
-    sig: List[List[SignatureCell]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
+    sig: List[List[SignatureCell]] = [
+        ["*" for _ in range(window_size)] for _ in range(window_size)
+    ]
     for i in range(window_size):
         for j in range(window_size):
             vals = {int(win[i, j]) for win in windows}
@@ -335,57 +354,10 @@ def mine_nxn_signature(
     return sig
 
 
-def mine_3x3_signature(
-    G: Sequence[Sequence[int]],
-    *,
-    center_color: int,
-    require_full_window: bool = True,
-) -> Optional[Signature3x3]:
-    import numpy as np
-    g = np.asarray(G, dtype=int)
-    H, W = g.shape
-    # collect full 3×3 windows centered on the specified color
-    windows: List[np.ndarray] = []
-    for r in range(1, H - 1):
-        for c in range(1, W - 1):
-            if int(g[r, c]) != int(center_color):
-                continue
-            win = g[r - 1 : r + 2, c - 1 : c + 2]
-            if require_full_window and (win.shape != (3, 3)):
-                continue
-            windows.append(win.copy())
-    if not windows:
-        return None
-    # build consensus with wildcard
-    sig: Signature3x3 = [["*" for _ in range(3)] for _ in range(3)]
-    for i in range(3):
-        for j in range(3):
-            vals = {int(w[i, j]) for w in windows}
-            if len(vals) == 1:
-                v = next(iter(vals))
-                sig[i][j] = int(v)
-            else:
-                sig[i][j] = "*"
-    return sig
-
-
-def format_3x3_signature(sig: Signature3x3) -> str:
-    # Renders like [[a,b,c],[d,e,f],[g,h,i]] with * as wildcard
-    def cell(x: SignatureCell) -> str:
-        return str(x)
-    rows = ["[" + ", ".join(cell(x) for x in row) + "]" for row in sig]
-    return "[" + ", ".join(rows) + "]"
-
-def format_3x3_pretty(sig: Signature3x3) -> str:
-    # Multi-line 2D rendering without commas for readability
-    def cell(x: SignatureCell) -> str:
-        return str(x)
-    lines = ["[ " + " ".join(cell(x) for x in row) + " ]" for row in sig]
-    return "\n" + "\n".join(lines)
-
 def format_nxn_signature(sig: List[List[SignatureCell]]) -> str:
     def cell(x: SignatureCell) -> str:
         return str(x)
+
     rows = ["[" + ", ".join(cell(x) for x in row) + "]" for row in sig]
     return "[" + ", ".join(rows) + "]"
 
@@ -393,6 +365,7 @@ def format_nxn_signature(sig: List[List[SignatureCell]]) -> str:
 def format_nxn_pretty(sig: List[List[SignatureCell]]) -> str:
     def cell(x: SignatureCell) -> str:
         return str(x)
+
     lines = ["[ " + " ".join(cell(x) for x in row) + " ]" for row in sig]
     return "\n" + "\n".join(lines)
 
@@ -409,6 +382,7 @@ def mine_nxn_schema_with_vars(
     require_full_window: bool = True,
 ) -> Optional[List[List[SignatureCell]]]:
     import numpy as np
+
     g = np.asarray(G, dtype=int)
     H, W = g.shape
     if window_size % 2 == 0 or window_size < 1:
@@ -439,7 +413,10 @@ def mine_nxn_schema_with_vars(
     adj = [[False] * npos for _ in range(npos)]
     for a in range(npos):
         adj[a][a] = True
-    def idx(i: int, j: int) -> int: return i * window_size + j
+
+    def idx(i: int, j: int) -> int:
+        return i * window_size + j
+
     # Check pairwise equality across all windows for non-constant positions
     for a in range(npos):
         if is_const[a]:
@@ -480,7 +457,9 @@ def mine_nxn_schema_with_vars(
             components.append(sorted(comp))
 
     # Assign variable tokens to components in scan order
-    sig: List[List[SignatureCell]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
+    sig: List[List[SignatureCell]] = [
+        ["*" for _ in range(window_size)] for _ in range(window_size)
+    ]
     # Fill constants
     for p in range(npos):
         if is_const[p]:
@@ -498,19 +477,3 @@ def mine_nxn_schema_with_vars(
             sig[i][j] = tok
     # Leave remaining non-constant singles as '*'
     return sig
-
-
-def mine_3x3_schema_with_vars(
-    G: Sequence[Sequence[int]],
-    *,
-    center_color: int,
-    require_full_window: bool = True,
-) -> Optional[Signature3x3]:
-    return mine_nxn_schema_with_vars(G, center_color=center_color, window_size=3, require_full_window=require_full_window)  # type: ignore[return-value]
-
-
-def format_3x3_schema(sig: Signature3x3) -> str:
-    return format_3x3_signature(sig)
-
-def format_3x3_schema_pretty(sig: Signature3x3) -> str:
-    return format_3x3_pretty(sig)
