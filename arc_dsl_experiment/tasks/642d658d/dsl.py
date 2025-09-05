@@ -266,6 +266,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         sel_color = getattr(state, "color", None)
         if sel_color is None:
             raise ValueError("OverlayContext missing required color")
+        # Collect evidence depending on kind
         for ov in state.overlays:
             r, c = ov["center_row"] - 1, ov["center_col"] - 1
             if int(g[r, c]) != int(sel_color):
@@ -281,17 +282,58 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
                     if a == b and a != 0:
                         flank_colors.append(a)
             elif kind == "schema_nxn":
-                # handled by fallback below (uniform cross color around centers)
-                pass
+                # Use the mined n×n pattern (equality among positions) rather than unconditional cross.
+                n = WINDOW_SIZE_DEFAULT
+                # Only consider if full window exists
+                up_left = (n - 1) // 2
+                down_right = n // 2
+                if r - up_left < 0 or r + down_right >= g.shape[0]:
+                    continue
+                if c - up_left < 0 or c + down_right >= g.shape[1]:
+                    continue
+                # Determine if schema implies equality across the cross positions across ALL overlays with full windows on this grid.
+                # First pass: build windows for this grid (full only)
+                wins = []
+                for ov2 in state.overlays:
+                    rr, cc = ov2["center_row"] - 1, ov2["center_col"] - 1
+                    if int(g[rr, cc]) != int(sel_color):
+                        continue
+                    if rr - up_left < 0 or rr + down_right >= g.shape[0]:
+                        continue
+                    if cc - up_left < 0 or cc + down_right >= g.shape[1]:
+                        continue
+                    wins.append(g[rr-up_left:rr+down_right+1, cc-up_left:cc+down_right+1].copy())
+                if not wins:
+                    continue
+                def pos_index(i: int, j: int) -> int:
+                    return i * n + j
+                # cross positions relative to window
+                ci, cj = up_left, up_left  # center within window
+                up = pos_index(ci-1, cj)
+                down = pos_index(ci+1, cj)
+                left = pos_index(ci, cj-1)
+                right = pos_index(ci, cj+1)
+                group = [up, down, left, right]
+                # Check equality across all windows for all pairs in group
+                def equal_all_positions(a: int, b: int) -> bool:
+                    ai, aj = divmod(a, n); bi, bj = divmod(b, n)
+                    for win in wins:
+                        if int(win[ai, aj]) != int(win[bi, bj]):
+                            return False
+                    return True
+                implied_equal = all(equal_all_positions(group[0], p) for p in group[1:])
+                if not implied_equal:
+                    continue
+                # If implied by schema, read this instance's cross value and record when nonzero and equal
+                vals = _cross_vals(g, r+1, c+1)
+                if len(vals)==4 and len(set(vals))==1 and vals[0]!=0:
+                    flank_colors.append(int(vals[0]))
         if flank_colors:
             cnt = Counter(flank_colors); top = max(cnt.values())
             cands = [k for k,v in cnt.items() if v==top]
             return ColorState(int(min(cands)))
-        # fallback: mode of colors at cross around overlay centers
-        ok, color, _ = overlays_have_uniform_cross_color(g, state.overlays)
-        if ok and color is not None:
-            return ColorState(int(color))
-        return ColorState(int(bright_overlay_cross_mode(g, state.overlays)))
+        # No evidence from required pattern; return 0 (no fallback to cross-only)
+        return ColorState(0)
 def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
     out: List[Optional[int]] = []
     for ov in overlays:
