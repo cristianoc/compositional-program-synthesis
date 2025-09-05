@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Iterable, List, Literal
+from typing import Iterable, List, Literal, Optional
 
 import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
@@ -44,13 +44,14 @@ def detect_pattern_overlays(
     color: int,
     min_repeats: int = 2,
     dedup_centers: bool = True,
+    window_size: Optional[int] = None,
 ) -> List[dict]:
     """
     Detect overlays by simple pattern templates.
 
     - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
     - kind="v3": emit one overlay per center matching (x, color, x) vertically.
-    - kind="schema_nxn": emit one overlay per pixel of the given color with an n×n box (default n=3).
+    - kind="schema_nxn": emit one overlay per pixel of the given color with an n×n box (default n=3 unless provided via window_size).
     """
     g = _to_np_grid(grid)
     H, W = g.shape
@@ -58,13 +59,17 @@ def detect_pattern_overlays(
     overlay_id = 1
 
     if kind == "schema_nxn":
-        # One overlay per pixel of the given color. Box is n×n clipped to grid (n defaults to 3).
+        # One overlay per pixel of the given color. Box is n×n clipped to grid.
+        n = int(window_size) if window_size is not None else 3
+        if n % 2 == 0 or n < 1:
+            raise ValueError("window_size must be odd and >= 1")
+        r2 = n // 2
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
                     continue
-                y1 = max(0, r - 1); x1 = max(0, c - 1)
-                y2 = min(H - 1, r + 1); x2 = min(W - 1, c + 1)
+                y1 = max(0, r - r2); x1 = max(0, c - r2)
+                y2 = min(H - 1, r + r2); x2 = min(W - 1, c + r2)
                 overlays.append(_emit_overlay(r, c, y1, x1, y2, x2, overlay_id))
                 overlay_id += 1
         # (Printing of mined patterns has been disabled.)
@@ -100,5 +105,4 @@ def detect_pattern_overlays(
         return overlays
     else:
         raise ValueError(f"Unknown pattern kind: {kind}")
-
 

@@ -74,16 +74,20 @@ def detect_overlays(
     kind: str = "h3",
     color: int,
     min_repeats: int = 2,
+    window_size: Optional[int] = None,
 ) -> List[dict]:
+    # For schema_nxn, propagate a configurable window size (defaults to WINDOW_SIZE_DEFAULT).
+    ws = int(window_size) if window_size is not None else (WINDOW_SIZE_DEFAULT if kind == "schema_nxn" else None)
     return detect_pattern_overlays(
         grid,
         kind=kind,  # type: ignore[arg-type]
         color=int(color),
         min_repeats=min_repeats,
+        window_size=ws,
     )
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["h3", "v3", "schema_nxn"]
-# Default window size for schemanxn (generalized window_size x window_size). Only set at top level; detection remains default.
+# Default window size for schema_nxn (n×n with odd n≥1). Used across detection and pretty-printing.
 WINDOW_SIZE_DEFAULT: int = 3
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
@@ -96,46 +100,50 @@ def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
             if len(ovs) == 0:
                 return False
     return True
-def _gather_schema_windows(task: Dict, color: int):
+def _gather_schema_windows(task: Dict, color: int, *, window_size: int) -> List[np.ndarray]:
     import numpy as np
     windows = []
+    if window_size % 2 == 0 or window_size < 1:
+        raise ValueError("window_size must be odd and >= 1")
+    r2 = window_size // 2
     def collect_from_grid(g):
         g = np.asarray(g, dtype=int)
         H, W = g.shape
-        for r in range(1, H-1):
-            for c in range(1, W-1):
-                if int(g[r,c]) == int(color):
-                    windows.append(g[r-1:r+2, c-1:c+2].copy())
+        # Only collect full windows completely inside the grid
+        for r in range(r2, H - r2):
+            for c in range(r2, W - r2):
+                if int(g[r, c]) == int(color):
+                    windows.append(g[r-r2:r+r2+1, c-r2:c+r2+1].copy())
     for split in ("train","test"):
         for ex in task.get(split, []):
             collect_from_grid(ex["input"])
     return windows
-def _schema_nxn_string_for_task(task: Dict, color: int) -> str:
-    wins = _gather_schema_windows(task, color)
+def _schema_nxn_string_for_task(task: Dict, color: int, *, window_size: int) -> str:
+    wins = _gather_schema_windows(task, color, window_size=window_size)
     if not wins:
         return "[]"
     # consensus with wildcard and variable-aware equalities across ALL examples
     # Determine constants per position across windows
     pos_vals: List[set[int]] = []
-    for i in range(3):
-        for j in range(3):
+    for i in range(window_size):
+        for j in range(window_size):
             vals = {int(win[i, j]) for win in wins}
             pos_vals.append(vals)
     is_const = [len(s) == 1 for s in pos_vals]
     const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
     # Equality graph among non-constants
-    npos = 9
+    npos = window_size * window_size
     adj = [[False] * npos for _ in range(npos)]
     for a in range(npos):
         adj[a][a] = True
     for a in range(npos):
         if is_const[a]:
             continue
-        ai, aj = divmod(a, 3)
+        ai, aj = divmod(a, window_size)
         for b in range(a + 1, npos):
             if is_const[b]:
                 continue
-            bi, bj = divmod(b, 3)
+            bi, bj = divmod(b, window_size)
             equal_all = True
             for win in wins:
                 if int(win[ai, aj]) != int(win[bi, bj]):
@@ -162,10 +170,10 @@ def _schema_nxn_string_for_task(task: Dict, color: int) -> str:
         if len(comp) >= 2:
             components.append(sorted(comp))
     # Build schema grid with constants, variables, and '*'
-    schema: List[List[Union[int, str]]] = [["*" for _ in range(3)] for _ in range(3)]
+    schema: List[List[Union[int, str]]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
     for p in range(npos):
         if is_const[p]:
-            i, j = divmod(p, 3)
+            i, j = divmod(p, window_size)
             cv_opt = const_val[p]
             schema[i][j] = int(cv_opt) if cv_opt is not None else "*"
     var_tokens = ("X", "Y", "Z", "U", "V", "W")
@@ -174,7 +182,7 @@ def _schema_nxn_string_for_task(task: Dict, color: int) -> str:
         tok = var_tokens[min(next_var, len(var_tokens) - 1)]
         next_var += 1
         for p in comp:
-            i, j = divmod(p, 3)
+            i, j = divmod(p, window_size)
             schema[i][j] = tok
     return "[" + ", ".join("[" + ", ".join(str(x) for x in row) + "]" for row in schema) + "]"
 # ===================== Abstraction & Predicates =====================
@@ -439,7 +447,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             extra = f", pattern=[X, {int(c)}, X]"
         elif kind == "schema_nxn":
             # Include the mined variable-aware schema pattern and the current window size
-            sig = _schema_nxn_string_for_task(task, c)
+            sig = _schema_nxn_string_for_task(task, c, window_size=WINDOW_SIZE_DEFAULT)
             extra = f", pattern={sig}, window_size={WINDOW_SIZE_DEFAULT}"
         programs_ABS.append(
             f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
