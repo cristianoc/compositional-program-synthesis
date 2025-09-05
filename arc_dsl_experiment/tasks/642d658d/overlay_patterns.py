@@ -84,16 +84,18 @@ def detect_pattern_overlays(
                     overlay_id += 1
         return overlays
     elif kind == "v3":
-        # One overlay per pixel of the given color that forms vertical (x,color,x) with its neighbors
+        # Use generic schema mining to detect [X, color, X] on vertical triples
+        desired_schema = ("X", int(color), "X")
         for r in range(H):
             for c in range(W):
                 if int(g[r, c]) != int(color):
                     continue
-                if r-1 < 0 or r+1 >= H:
+                if r - 1 < 0 or r + 1 >= H:
                     continue
-                a, b = int(g[r-1, c]), int(g[r+1, c])
-                if a == b and a != 0:
-                    overlays.append(_emit_overlay(r, c, r-1, c, r+1, c, overlay_id))
+                triple = (int(g[r - 1, c]), int(g[r, c]), int(g[r + 1, c]))
+                schemas = gen_schemas_for_triple(triple)
+                if desired_schema in schemas and int(triple[0]) != 0:
+                    overlays.append(_emit_overlay(r, c, r - 1, c, r + 1, c, overlay_id))
                     overlay_id += 1
         return overlays
     else:
