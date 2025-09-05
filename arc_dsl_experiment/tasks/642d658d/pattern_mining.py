@@ -27,7 +27,7 @@ Lower-level helpers are exposed for custom workflows.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Sequence, Tuple
+from typing import Any, Callable, Dict, Hashable, Iterable, List, Sequence, Tuple, Union, Optional
 from collections import Counter
 import math
 
@@ -289,3 +289,165 @@ def demo() -> None:
         )
 if __name__ == "__main__":
     demo()
+
+# ------------------------------ 3x3 Mining -----------------------------------
+# We mine a single 3x3 signature over all full 3x3 windows centered on a given color.
+# Rule: for each of the 9 positions, if all windows agree on the same constant value,
+# keep that constant; otherwise emit the wildcard symbol "*" (meaning "anything").
+
+SignatureCell = Union[int, str]
+Signature3x3 = List[List[SignatureCell]]
+
+
+def mine_3x3_signature(
+    G: Sequence[Sequence[int]],
+    *,
+    center_color: int,
+    require_full_window: bool = True,
+) -> Optional[Signature3x3]:
+    import numpy as np
+    g = np.asarray(G, dtype=int)
+    H, W = g.shape
+    # collect full 3x3 windows centered on the specified color
+    windows: List[np.ndarray] = []
+    for r in range(1, H - 1):
+        for c in range(1, W - 1):
+            if int(g[r, c]) != int(center_color):
+                continue
+            win = g[r - 1 : r + 2, c - 1 : c + 2]
+            if require_full_window and (win.shape != (3, 3)):
+                continue
+            windows.append(win.copy())
+    if not windows:
+        return None
+    # build consensus with wildcard
+    sig: Signature3x3 = [["*" for _ in range(3)] for _ in range(3)]
+    for i in range(3):
+        for j in range(3):
+            vals = {int(w[i, j]) for w in windows}
+            if len(vals) == 1:
+                v = next(iter(vals))
+                sig[i][j] = int(v)
+            else:
+                sig[i][j] = "*"
+    return sig
+
+
+def format_3x3_signature(sig: Signature3x3) -> str:
+    # Renders like [[a,b,c],[d,e,f],[g,h,i]] with * as wildcard
+    def cell(x: SignatureCell) -> str:
+        return str(x)
+    rows = ["[" + ", ".join(cell(x) for x in row) + "]" for row in sig]
+    return "[" + ", ".join(rows) + "]"
+
+def format_3x3_pretty(sig: Signature3x3) -> str:
+    # Multi-line 2D rendering without commas for readability
+    def cell(x: SignatureCell) -> str:
+        return str(x)
+    lines = ["[ " + " ".join(cell(x) for x in row) + " ]" for row in sig]
+    return "\n" + "\n".join(lines)
+
+# Extended: 3x3 schema with variables (X, Y, ...) for positions that are always equal
+_VAR_TOKENS_3X3: Tuple[str, ...] = ("X", "Y", "Z", "U", "V", "W", "Q", "R", "S")
+
+
+def mine_3x3_schema_with_vars(
+    G: Sequence[Sequence[int]],
+    *,
+    center_color: int,
+    require_full_window: bool = True,
+) -> Optional[Signature3x3]:
+    import numpy as np
+    g = np.asarray(G, dtype=int)
+    H, W = g.shape
+    windows: List[np.ndarray] = []
+    for r in range(1, H - 1):
+        for c in range(1, W - 1):
+            if int(g[r, c]) != int(center_color):
+                continue
+            win = g[r - 1 : r + 2, c - 1 : c + 2]
+            if require_full_window and (win.shape != (3, 3)):
+                continue
+            windows.append(win.copy())
+    if not windows:
+        return None
+    # Determine constants per position across windows
+    pos_vals: List[set[int]] = []
+    for i in range(3):
+        for j in range(3):
+            vals = {int(win[i, j]) for win in windows}
+            pos_vals.append(vals)
+    is_const = [len(s) == 1 for s in pos_vals]
+    const_val = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
+
+    # Equality relation across positions for non-constants: always equal across all windows
+    npos = 9
+    adj = [[False] * npos for _ in range(npos)]
+    for a in range(npos):
+        adj[a][a] = True
+    def idx(i: int, j: int) -> int: return i * 3 + j
+    # Check pairwise equality across all windows for non-constant positions
+    for a in range(npos):
+        if is_const[a]:
+            continue
+        ai, aj = divmod(a, 3)
+        for b in range(a + 1, npos):
+            if is_const[b]:
+                continue
+            bi, bj = divmod(b, 3)
+            equal_all = True
+            for win in windows:
+                if int(win[ai, aj]) != int(win[bi, bj]):
+                    equal_all = False
+                    break
+            if equal_all:
+                adj[a][b] = adj[b][a] = True
+
+    # Build components among non-constants using adjacency
+    visited = [False] * npos
+    components: List[List[int]] = []
+    for v in range(npos):
+        if visited[v] or is_const[v]:
+            continue
+        if not any(adj[v]):
+            continue
+        # BFS/DFS
+        stack = [v]
+        visited[v] = True
+        comp = [v]
+        while stack:
+            u = stack.pop()
+            for w in range(npos):
+                if not visited[w] and adj[u][w]:
+                    visited[w] = True
+                    stack.append(w)
+                    comp.append(w)
+        if len(comp) >= 2:
+            components.append(sorted(comp))
+
+    # Assign variable tokens to components in scan order
+    sig: Signature3x3 = [["*" for _ in range(3)] for _ in range(3)]
+    # Fill constants
+    for p in range(npos):
+        if is_const[p]:
+            i, j = divmod(p, 3)
+            sig[i][j] = int(const_val[p])  # type: ignore[arg-type]
+    # Map position to var token
+    var_token_map: Dict[int, str] = {}
+    next_var_idx = 0
+    for comp in components:
+        tok = _VAR_TOKENS_3X3[min(next_var_idx, len(_VAR_TOKENS_3X3) - 1)]
+        next_var_idx += 1
+        for p in comp:
+            i, j = divmod(p, 3)
+            var_token_map[p] = tok
+            sig[i][j] = tok
+    # Leave remaining non-constant singles as '*'
+    return sig
+
+
+def format_3x3_schema(sig: Signature3x3) -> str:
+    return format_3x3_signature(sig)
+
+def format_3x3_schema_pretty(sig: Signature3x3) -> str:
+    return format_3x3_pretty(sig)

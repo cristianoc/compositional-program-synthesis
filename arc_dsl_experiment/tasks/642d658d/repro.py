@@ -9,6 +9,7 @@
 
 
 import json, time, numpy as np, os
+from typing import Optional, Any
 from importlib import reload
 import sys
 from pathlib import Path
@@ -41,7 +42,7 @@ def main():
     # choose best colors per kind on train
     COLOR_H3 = _best_color_for_kind(task, "h3")
     COLOR_V3 = _best_color_for_kind(task, "v3")
-    COLOR_CROSS3 = _best_color_for_kind(task, "cross3")
+    COLOR_CROSS3 = _best_color_for_kind(task, "schema3x3")
 
     # Enumerate and print programs (composed form)
     # Pretty print programs found in both spaces (README_clean.md §4):
@@ -92,7 +93,7 @@ def main():
     stats = measure(task, num_preops=200, seed=11)
     print("\n=== STATS (200 preops) ===")
     print(stats)
-    # Quick evaluation of other pattern kinds (v3, cross3) on train
+    # Quick evaluation of other pattern kinds (v3, schema3x3) on train
     def eval_kind(kind: str):
         best_c = _best_color_for_kind(task, kind)
         res = []
@@ -102,13 +103,13 @@ def main():
         return sum(res), len(res), best_c
 
     k_v3_ok, k_total, k_v3_c = eval_kind("v3")
-    k_cross_ok, _, k_cross_c = eval_kind("cross3")
-    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n cross3: {k_cross_ok}/{k_total} (color={k_cross_c})")
+    k_cross_ok, _, k_cross_c = eval_kind("schema3x3")
+    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n schema3x3: {k_cross_ok}/{k_total} (color={k_cross_c})")
     # Test-set predictions (no GT in ARC test; we just report)
     gtest = np.array(task["test"][0]["input"], dtype=int)
     pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3", COLOR_V3)
-    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "cross3", COLOR_CROSS3)
-    print(f"Test predictions: v3={pred_v3} cross3={pred_cross3}")
+    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "schema3x3", COLOR_CROSS3)
+    print(f"Test predictions: v3={pred_v3} schema3x3={pred_cross3}")
 
     # Verify overlay counts for h3_yellow vs count of yellow pixels
     def count_color(g, color):
@@ -135,7 +136,7 @@ def main():
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3", color=COLOR_CROSS3))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="schema3x3", color=COLOR_CROSS3))
             details["train"].append({
                 "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
@@ -146,7 +147,7 @@ def main():
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="cross3", color=COLOR_CROSS3))
+            centers_cross3 = centers_of(dsl.detect_overlays(g, kind="schema3x3", color=COLOR_CROSS3))
             details["test"].append({
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
@@ -198,16 +199,14 @@ def main():
         overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
         H, W = g.shape
         fig, axes = plt.subplots(1, 2, figsize=(12, 8), dpi=150)
-        fig.canvas.toolbar_visible = False
-        fig.canvas.header_visible = False
-        fig.canvas.footer_visible = False
-        ax = axes[0]
+        axes_any: Any = axes
+        ax = axes_any[0]
         ax.imshow(rgb, interpolation='nearest')
         ax.set_title(title, fontsize=12)
         ax.set_xticks([]); ax.set_yticks([])
         overlays_sorted = sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"]))
         for ov in overlays_sorted:
-            if kind == "cross3":
+            if kind == "schema3x3":
                 rr = ov["center_row"] - 1
                 cc = ov["center_col"] - 1
                 # vertical arm (3 cells): from rr-1 to rr+1 at column cc
@@ -220,13 +219,13 @@ def main():
                 ax.add_patch(rect)
         ax.set_xlim(-0.5, W-0.5); ax.set_ylim(H-0.5, -0.5)
 
-        ax2 = axes[1]
+        ax2 = axes_any[1]
         tile = np.full((20, 20, 3), PALETTE.get(int(pred_color), (0,0,0)), dtype=np.uint8)
         ax2.imshow(tile, interpolation='nearest')
         ax2.set_title(f"Predicted Color: {int(pred_color)}", fontsize=12)
         ax2.set_xticks([]); ax2.set_yticks([])
         # Use fixed metadata to avoid time stamps or varying text chunks in PNG
-        meta = {"Date": "1970-01-01T00:00:00", "Software": "arc-repro"}
+        meta: dict[str, Optional[str]] = {"Date": "1970-01-01T00:00:00", "Software": "arc-repro"}
         # Avoid tight_layout heuristics shifting content; rely on fixed bbox
         plt.savefig(out_path, bbox_inches="tight", metadata=meta)
         plt.close(fig)
@@ -256,9 +255,9 @@ def main():
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: cross3 (color={COLOR_CROSS3}) (GT={int(ex['output'][0][0])})",
+            f"Train {i}: schema3x3 (color={COLOR_CROSS3}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}_x.png"),
-            kind="cross3", color=COLOR_CROSS3,
+            kind="schema3x3", color=COLOR_CROSS3,
         )
 
     # Test pic
@@ -266,7 +265,7 @@ def main():
     predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_CROSS3)
     render_grid_with_overlays(gtest, predt, f"Test: h3 (color={COLOR_H3})", str(images_dir / "overlay_test.png"), kind="h3", color=COLOR_H3)
     render_grid_with_overlays(gtest, predt, f"Test: v3 (color={COLOR_V3})", str(images_dir / "overlay_test_v.png"), kind="v3", color=COLOR_V3)
-    render_grid_with_overlays(gtest, predt, f"Test: cross3 (color={COLOR_CROSS3})", str(images_dir / "overlay_test_x.png"), kind="cross3", color=COLOR_CROSS3)
+    render_grid_with_overlays(gtest, predt, f"Test: schema3x3 (color={COLOR_CROSS3})", str(images_dir / "overlay_test_x.png"), kind="schema3x3", color=COLOR_CROSS3)
 
 if __name__ == "__main__":
     main()

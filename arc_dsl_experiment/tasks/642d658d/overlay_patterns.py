@@ -1,11 +1,31 @@
 from __future__ import annotations
-from typing import Iterable, List, Literal
+from typing import Iterable, List, Literal, Set
 
 import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
+from pattern_mining import (
+    mine_3x3_signature,
+    format_3x3_signature,
+    format_3x3_pretty,
+    mine_3x3_schema_with_vars,
+    format_3x3_schema,
+    format_3x3_schema_pretty,
+)
 
 
-PatternKind = Literal["h3", "v3", "cross3"]
+PatternKind = Literal["h3", "v3", "schema3x3"]
+
+# Deduplicate schema3x3 prints per unique (grid,color) fingerprint in this process
+_printed_schema3x3: Set[str] = set()
+
+def _grid_fingerprint(g: np.ndarray, color: int) -> str:
+    import hashlib
+    h = hashlib.sha1()
+    h.update(g.shape[0].to_bytes(4, 'little'))
+    h.update(g.shape[1].to_bytes(4, 'little'))
+    h.update(g.astype(np.int16, copy=False).tobytes())
+    h.update(int(color).to_bytes(2, 'little'))
+    return h.hexdigest()
 
 
 def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
@@ -48,14 +68,14 @@ def detect_pattern_overlays(
 
     - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
     - kind="v3": emit one overlay per center matching (x, color, x) vertically.
-    - kind="cross3": emit one overlay per pixel of the given color with a 3x3 box.
+    - kind="schema3x3": emit one overlay per pixel of the given color with a 3x3 box.
     """
     g = _to_np_grid(grid)
     H, W = g.shape
     overlays: List[dict] = []
     overlay_id = 1
 
-    if kind == "cross3":
+    if kind == "schema3x3":
         # One overlay per pixel of the given color. Box is 3x3 clipped to grid.
         for r in range(H):
             for c in range(W):
@@ -65,7 +85,7 @@ def detect_pattern_overlays(
                 y2 = min(H - 1, r + 1); x2 = min(W - 1, c + 1)
                 overlays.append(_emit_overlay(r, c, y1, x1, y2, x2, overlay_id))
                 overlay_id += 1
-        # For this kind, we return immediately (no grouping by repeats)
+        # (Printing of mined patterns has been disabled.)
         return overlays
     elif kind == "h3":
         # Use generic schema mining to detect [X, color, X] horizontal windows
