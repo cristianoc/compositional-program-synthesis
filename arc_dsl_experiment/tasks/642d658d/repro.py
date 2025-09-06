@@ -53,27 +53,55 @@ def main():
     COLOR_3x1 = _best_color_for_shape((3,1))
     COLOR_Wn = _best_color_for_shape(BASE_DEFAULT_SHAPE)
 
-    # Enumerate programs for three window shapes: 1x3, 3x1, default (no per-shape printing here)
-    # We will print a single combined, top-level structure once below.
-    def run_enumeration_for_shape(shape_name: str, shape: tuple[int,int]):
+    # Compute G once (shape-agnostic) and ABS per shape.
+    # G once
+    from importlib import reload
+    reload(dsl)
+    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', BASE_DEFAULT_SHAPE)
+    g_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)['G']
+
+    # ABS per shape (avoid recomputing G)
+    def enumerate_abs_for_shape(shape: tuple[int,int]):
         from importlib import reload
+        import numpy as np
         import dsl as _dsl
         reload(_dsl)
         setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
-        res = _dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)
-        return shape_name, res
+        train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
+        colors = list(range(1,10))
+        total_abs = len(_dsl.PATTERN_KINDS) * len(colors)
+        valid_abs = []
+        for kind in _dsl.PATTERN_KINDS:
+            for c in colors:
+                if not _dsl.pattern_present_in_all_examples(task, kind, c):
+                    continue
+                ok = True
+                for x,y in train_pairs:
+                    if _dsl.predict_with_pattern_kind(x.tolist(), kind, c) != y:
+                        ok = False; break
+                if ok:
+                    valid_abs.append((kind, c))
+        programs_abs = []
+        for (kind, c) in valid_abs:
+            extra = ""
+            if kind == "window_nxm":
+                extra = f", window_shape={shape}"
+            programs_abs.append(
+                f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
+            )
+        return {"nodes": total_abs, "programs": programs_abs}
 
     programs_all = {}
     for nm, sh in (("1x3", (1,3)), ("3x1", (3,1)), ("window", BASE_DEFAULT_SHAPE)):
-        name, res = run_enumeration_for_shape(nm, sh)  # type: ignore[arg-type]
-        programs_all[name] = res
+        abs_part = enumerate_abs_for_shape(sh)  # type: ignore[arg-type]
+        programs_all[nm] = {"G": g_once, "ABS": abs_part}
     # Print a single combined, top-level structure (like before) and write combined JSON
     programs_path = HERE / "programs_found.json"
     try:
         # Print node counts once
         # G nodes are the same across shapes; ABS nodes represent 3 instantiations × 9 colors
         any_shape = next(iter(programs_all.values()))
-        # Derive G nodes directly from DSL to reflect current COLOR_RULES length
+        # G nodes from DSL to reflect current COLOR_RULES length (composition-only)
         try:
             g_nodes = len(dsl.COLOR_RULES)
         except Exception:
@@ -86,7 +114,7 @@ def main():
 
         # Print programs once
         print("\n=== Programs found (G core) ===")
-        g_progs = any_shape['G']['programs']
+        g_progs = programs_all['window']['G']['programs'] if 'window' in programs_all else any_shape['G']['programs']
         if g_progs:
             for sname in g_progs:
                 print("-", sname)
