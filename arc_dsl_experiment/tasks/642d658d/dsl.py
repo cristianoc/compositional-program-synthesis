@@ -93,7 +93,7 @@ class Pipeline:
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["window_nxm"]
 # Default window shape for window_nxm (n×m with n,m≥1). Used across detection and pretty-printing.
-WINDOW_SHAPE_DEFAULT: tuple[int, int] = (3, 3)
+## Removed default window shape; shapes are explicitly enumerated where needed.
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Removed overlay-based pattern presence checks.
@@ -1362,7 +1362,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     total_G = len(COLOR_RULES)
 
     # Abstractions: enumerate universal fixed-schema pipelines only (no overlay-based seeds)
-    shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
+    shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = [
         OpUniformColorFromMatches(),
         OpUniformColorPerSchemaThenMode(),
@@ -1434,7 +1434,7 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     t1=time.perf_counter()
     # ABS (typed enumeration including schema matching chains)
     t2=time.perf_counter()
-    shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
+    shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = [
         OpUniformColorFromMatches(), OpUniformColorPerSchemaThenMode(), OpUniformColorFromSchemaConstantsOnly(), OpUniformColorFromMatchesExcludeGlobal(), OpUniformColorFromMatchesUniformNeighborhood(), OpUniformColorPerSchemaThenMode(cross_only=False), OpUniformColorFromMatchesExcludeGlobal(cross_only=True)
     ]

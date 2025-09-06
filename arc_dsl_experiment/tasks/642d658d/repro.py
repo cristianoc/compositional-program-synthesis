@@ -369,7 +369,7 @@ def main():
     # Build a single mosaic image with all train + test rows and columns for kinds
     def render_mosaic_all_examples(task, COLOR_1x3: int, COLOR_3x1: int, COLOR_Wn: int, out_path: str):
         import numpy as np
-        base_shape = tuple(dsl.WINDOW_SHAPE_DEFAULT)
+        base_shape = (3,3)
         kinds: list[tuple[str, tuple[int,int], int]] = [("1x3", (1,3), COLOR_1x3), ("3x1", (3,1), COLOR_3x1), ("WINDOW", base_shape, COLOR_Wn)]
         rows = []
         row_labels = []
@@ -544,7 +544,7 @@ def main():
 
         def render_mosaic_universal_all_examples(task, out_path: str):
             # Prepare schemas per shape once
-            shapes = [(1,3),(3,1),tuple(dsl.WINDOW_SHAPE_DEFAULT)]
+            shapes = [(1,3),(3,1),(3,3)]
             schemas_per_shape: dict[tuple[int,int], list[list[list[object]]]] = {}
             for ushape in shapes:
                 uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
@@ -565,7 +565,7 @@ def main():
             # Build rows
             rows = []
             row_labels = []
-            kinds = [("1x3", (1,3)), ("3x1", (3,1)), ("WINDOW", tuple(dsl.WINDOW_SHAPE_DEFAULT))]
+            kinds = [("1x3", (1,3)), ("3x1", (3,1)), ("WINDOW", (3,3))]
             for idx, ex in enumerate(task["train"], start=1):
                 g = np.array(ex["input"], dtype=int)
                 pan = []
