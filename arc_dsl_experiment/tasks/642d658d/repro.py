@@ -53,24 +53,54 @@ def main():
     COLOR_3x1 = _best_color_for_shape((3,1))
     COLOR_Wn = _best_color_for_shape(BASE_DEFAULT_SHAPE)
 
-    # Enumerate and print programs for three window shapes: 1x3, 3x1, default
-    # Pretty print programs found in each configuration; persist a single combined JSON
+    # Enumerate programs for three window shapes: 1x3, 3x1, default (no per-shape printing here)
+    # We will print a single combined, top-level structure once below.
     def run_enumeration_for_shape(shape_name: str, shape: tuple[int,int]):
         from importlib import reload
         import dsl as _dsl
         reload(_dsl)
         setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
-        print(f"\n=== Programs (window_nxm, shape={shape_name}) ===")
-        res = _dsl.print_programs_for_task(task, num_preops=200, seed=11)
+        res = _dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)
         return shape_name, res
 
     programs_all = {}
     for nm, sh in (("1x3", (1,3)), ("3x1", (3,1)), ("window", BASE_DEFAULT_SHAPE)):
         name, res = run_enumeration_for_shape(nm, sh)  # type: ignore[arg-type]
         programs_all[name] = res
-    # Write combined summary as well
+    # Print a single combined, top-level structure (like before) and write combined JSON
     programs_path = HERE / "programs_found.json"
     try:
+        # Print node counts once
+        # G nodes are the same across shapes; ABS nodes represent 3 instantiations × 9 colors
+        any_shape = next(iter(programs_all.values()))
+        g_nodes = any_shape['G']['nodes']
+        abs_nodes_single = any_shape['ABS']['nodes']
+        abs_nodes_total = abs_nodes_single * 3
+        print("=== Node counts ===")
+        print(f"G core nodes: {g_nodes}")
+        print(f"Overlay+predicate nodes: {abs_nodes_total}")
+
+        # Print programs once
+        print("\n=== Programs found (G core) ===")
+        g_progs = any_shape['G']['programs']
+        if g_progs:
+            for sname in g_progs:
+                print("-", sname)
+        else:
+            print("(none)")
+
+        print("\n=== Programs found (overlay abstraction + pattern check) ===")
+        # Merge ABS programs from the three shapes
+        abs_all = []
+        for shape_name, res in programs_all.items():
+            abs_all.extend(res['ABS']['programs'])
+        if abs_all:
+            for sname in abs_all:
+                print("-", sname)
+        else:
+            print("(none)")
+
+        # Persist combined JSON
         with open(programs_path, "w", encoding="utf-8") as f:
             json.dump(programs_all, f, indent=2, sort_keys=True)
         print("Wrote", programs_path)
