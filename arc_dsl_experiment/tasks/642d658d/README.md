@@ -43,7 +43,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 
 ## 2. Enumeration spaces
 
-- G core: color rules only (no pre-ops). Nodes = number of rules (here 4).
+- G core: composed color rules only (no pre-ops). Nodes = number of composed rules (currently 70; see repro output).
 - Abstraction: pattern kinds × colors (1–9), no pre-ops. Nodes = 3 × 9 = 27.
 
 ## 3. Results
@@ -54,7 +54,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
   - `PatternOverlayExtractor(kind=window_nxm, color=c, window_shape=(n,m)) |> UniformPatternPredicate |> OutputAgreedColor`
 
 - Node counts (this run):
-  - G core: 4
+  - G core: 70 (composition only)
   - Abstraction: 27
 
 ## Code layout
