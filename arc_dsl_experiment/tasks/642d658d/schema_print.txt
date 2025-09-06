@@ -82,6 +82,257 @@ overlay_id 4  center (22,  5) shape (3, 3)
  [X, Y, X]
 
 
+=== Sample window_nxm_all schemas (colorless, shape=(1, 3)) — train ===
+-- train[1] overlays=572 --
+overlay_id 1  center ( 1,  2) shape (1, 3)
+ [*, X, X]
+
+overlay_id 2  center ( 1,  3) shape (1, 3)
+ [X, X, X]
+
+overlay_id 3  center ( 1,  4) shape (1, 3)
+ [X, X, *]
+
+overlay_id 4  center ( 1,  5) shape (1, 3)
+ [X, *, X]
+
+-- train[2] overlays=440 --
+overlay_id 1  center ( 1,  2) shape (1, 3)
+ [X, *, X]
+
+overlay_id 2  center ( 1,  3) shape (1, 3)
+ [*, *, *]
+
+overlay_id 3  center ( 1,  4) shape (1, 3)
+ [*, X, X]
+
+overlay_id 4  center ( 1,  5) shape (1, 3)
+ [X, X, *]
+
+-- train[3] overlays=400 --
+overlay_id 1  center ( 1,  2) shape (1, 3)
+ [X, X, *]
+
+overlay_id 2  center ( 1,  3) shape (1, 3)
+ [*, X, X]
+
+overlay_id 3  center ( 1,  4) shape (1, 3)
+ [X, X, X]
+
+overlay_id 4  center ( 1,  5) shape (1, 3)
+ [X, X, X]
+
+
+=== Sample window_nxm_all schemas (colorless, shape=(1, 3)) — test ===
+-- test[1] overlays=540 --
+overlay_id 1  center ( 1,  2) shape (1, 3)
+ [X, X, *]
+
+overlay_id 2  center ( 1,  3) shape (1, 3)
+ [*, X, X]
+
+overlay_id 3  center ( 1,  4) shape (1, 3)
+ [X, X, *]
+
+overlay_id 4  center ( 1,  5) shape (1, 3)
+ [X, *, X]
+
+
+=== Sample window_nxm_all schemas (colorless, shape=(3, 1)) — train ===
+-- train[1] overlays=576 --
+overlay_id 1  center ( 2,  1) shape (3, 1)
+ [*]
+ [*]
+ [*]
+
+overlay_id 2  center ( 2,  2) shape (3, 1)
+ [X]
+ [*]
+ [X]
+
+overlay_id 3  center ( 2,  3) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+overlay_id 4  center ( 2,  4) shape (3, 1)
+ [X]
+ [*]
+ [X]
+
+-- train[2] overlays=440 --
+overlay_id 1  center ( 2,  1) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+overlay_id 2  center ( 2,  2) shape (3, 1)
+ [*]
+ [*]
+ [*]
+
+overlay_id 3  center ( 2,  3) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+overlay_id 4  center ( 2,  4) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+-- train[3] overlays=396 --
+overlay_id 1  center ( 2,  1) shape (3, 1)
+ [X]
+ [X]
+ [*]
+
+overlay_id 2  center ( 2,  2) shape (3, 1)
+ [X]
+ [X]
+ [*]
+
+overlay_id 3  center ( 2,  3) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+overlay_id 4  center ( 2,  4) shape (3, 1)
+ [X]
+ [*]
+ [X]
+
+
+=== Sample window_nxm_all schemas (colorless, shape=(3, 1)) — test ===
+-- test[1] overlays=550 --
+overlay_id 1  center ( 2,  1) shape (3, 1)
+ [X]
+ [X]
+ [*]
+
+overlay_id 2  center ( 2,  2) shape (3, 1)
+ [X]
+ [X]
+ [*]
+
+overlay_id 3  center ( 2,  3) shape (3, 1)
+ [X]
+ [X]
+ [*]
+
+overlay_id 4  center ( 2,  4) shape (3, 1)
+ [X]
+ [X]
+ [X]
+
+
+=== Sample window_nxm_all schemas (colorless, shape=(3, 3)) — train ===
+-- train[1] overlays=528 --
+overlay_id 1  center ( 2,  2) shape (3, 3)
+ [*, X, X]
+ [*, *, X]
+ [X, X, X]
+
+overlay_id 2  center ( 2,  3) shape (3, 3)
+ [X, X, X]
+ [*, X, *]
+ [X, X, X]
+
+overlay_id 3  center ( 2,  4) shape (3, 3)
+ [X, X, *]
+ [X, *, X]
+ [X, X, X]
+
+overlay_id 4  center ( 2,  5) shape (3, 3)
+ [X, *, X]
+ [*, X, X]
+ [X, X, X]
+
+-- train[2] overlays=400 --
+overlay_id 1  center ( 2,  2) shape (3, 3)
+ [X, *, X]
+ [X, *, X]
+ [X, X, X]
+
+overlay_id 2  center ( 2,  3) shape (3, 3)
+ [*, X, Y]
+ [Y, X, Y]
+ [X, X, Y]
+
+overlay_id 3  center ( 2,  4) shape (3, 3)
+ [X, Y, Y]
+ [X, Y, Y]
+ [X, Y, Y]
+
+overlay_id 4  center ( 2,  5) shape (3, 3)
+ [X, X, Y]
+ [X, X, Y]
+ [X, X, X]
+
+-- train[3] overlays=360 --
+overlay_id 1  center ( 2,  2) shape (3, 3)
+ [X, X, Y]
+ [X, X, Y]
+ [Y, Y, Y]
+
+overlay_id 2  center ( 2,  3) shape (3, 3)
+ [X, Y, Y]
+ [X, Y, X]
+ [Y, Y, Y]
+
+overlay_id 3  center ( 2,  4) shape (3, 3)
+ [X, X, X]
+ [X, *, X]
+ [X, X, X]
+
+overlay_id 4  center ( 2,  5) shape (3, 3)
+ [X, X, X]
+ [*, X, X]
+ [X, X, X]
+
+
+=== Sample window_nxm_all schemas (colorless, shape=(3, 3)) — test ===
+-- test[1] overlays=500 --
+overlay_id 1  center ( 2,  2) shape (3, 3)
+ [X, X, Y]
+ [X, X, Y]
+ [Y, Y, *]
+
+overlay_id 2  center ( 2,  3) shape (3, 3)
+ [X, Y, Y]
+ [X, Y, Y]
+ [Y, *, Y]
+
+overlay_id 3  center ( 2,  4) shape (3, 3)
+ [X, X, *]
+ [X, X, X]
+ [*, X, X]
+
+overlay_id 4  center ( 2,  5) shape (3, 3)
+ [X, *, X]
+ [X, X, X]
+ [X, X, X]
+
+
+=== Schema match across grid (colorless, shape=(3,3)) ===
+matches found: 46
+match[1] region=(1,1)-(3,3)
+ [., 8, 8]
+ [., ., 8]
+ [8, 8, 8]
+
+match[2] region=(2,7)-(4,9)
+ [., 8, 8]
+ [., ., 8]
+ [8, 8, 8]
+
+match[3] region=(2,8)-(4,10)
+ [., 8, 8]
+ [., ., 8]
+ [8, 8, 8]
+
+aggregated color from matches: 8
+
 === Combined schema (window_nxm) ===
  [*, X, *]
  [X, 4, X]
