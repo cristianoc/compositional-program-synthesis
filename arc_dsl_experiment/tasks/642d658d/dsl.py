@@ -225,18 +225,6 @@ class PatternOverlayExtractor:
 
 # Typed-DSL operations corresponding to the above components
 
-class PreOpPalette(Operation[GridState, GridState]):
-    input_type = GridState
-    output_type = GridState
-
-    def __init__(self, name: str, f: Callable[[np.ndarray], np.ndarray]):
-        self.name = name
-        self.f = f
-
-    def apply(self, state: GridState) -> GridState:
-        return GridState(self.f(state.grid))
-
-
 class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
@@ -368,11 +356,7 @@ def predict_with_pattern_kind(grid: List[List[int]], kind: str, color: int) -> i
     assert isinstance(out, ColorState)
     return int(out.color)
 # ===================== Core G: preops & color rules =====================
-def identity(x: np.ndarray) -> np.ndarray: return x
-# Pre-ops: only identity (no palette permutations needed in pattern-only system)
-def build_preops_for_dataset(train_pairs: List[Tuple[np.ndarray,int]], num_preops: int = 200, seed: int = 11):
-    preops: List[Tuple[str, Callable[[np.ndarray], np.ndarray]]] = [("identity", identity)]
-    return preops
+# (No pre-ops in this pattern-only system)
 # Global/simple color rules
 def rule_argmin_hist(x: np.ndarray) -> int:
     vals, cnt = np.unique(x[x!=0], return_counts=True)

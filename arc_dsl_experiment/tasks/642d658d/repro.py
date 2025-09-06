@@ -108,49 +108,44 @@ def main():
         print("[warn] failed to write programs_found.json:", e)
 
     # Measure timing and counts (single pass, rounded to reduce noise)
-    def measure(task, num_preops=200, seed=11):
-        preops = dsl.build_preops_for_dataset(train_pairs, num_preops=num_preops, seed=seed)
-
-        # G core
+    def measure(task, seed=11):
+                # G core
         color_rules = dsl.COLOR_RULES
         t0 = time.perf_counter()
         valid_G = []
         tried = 0; tries_first_G=None
-        for pre_name, pre_f in preops:
-            for cn, cf in color_rules:
-                tried += 1
-                ok = True
-                for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                    if int(cf(pre_f(x))) != y:
-                        ok=False; break
-                if ok:
-                    valid_G.append((pre_name, cn))
-                    if tries_first_G is None: tries_first_G = tried
-        t1 = time.perf_counter()
-
-        # Abstraction (use best color for schemanxn found on train)
-        t2 = time.perf_counter()
-        valid_ABS = []
-        tried2 = 0; tries_first_ABS=None
-        for pre_name, pre_f in preops:
-            tried2 += 1
-            ok=True
+        for cn, cf in color_rules:
+            tried += 1
+            ok = True
             for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                y_pred = dsl.predict_window_nxm_uniform_color(pre_f(x), COLOR_Wn)
-                if y_pred != y:
+                if int(cf(x)) != y:
                     ok=False; break
             if ok:
-                valid_ABS.append(pre_name)
-                if tries_first_ABS is None: tries_first_ABS = tried2
+                valid_G.append(cn)
+                if tries_first_G is None: tries_first_G = tried
+        t1 = time.perf_counter()
+
+        # Abstraction (single pipeline)
+        t2 = time.perf_counter()
+        valid_ABS = []
+        tried2 = 1; tries_first_ABS=None
+        ok=True
+        for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
+            y_pred = dsl.predict_window_nxm_uniform_color(x, COLOR_Wn)
+            if y_pred != y:
+                ok=False; break
+        if ok:
+            valid_ABS.append('window_nxm')
+            tries_first_ABS = 1
         t3 = time.perf_counter()
 
         return {
-            "G": {"nodes": len(preops)*len(color_rules), "programs_found": len(valid_G), "tries_to_first": tries_first_G, "time_sec": round(t1-t0, 2)},
-            "ABS":{"nodes": len(preops), "programs_found": len(valid_ABS), "tries_to_first": tries_first_ABS, "time_sec": round(t3-t2, 2)},
+            "G": {"nodes": len(color_rules), "programs_found": len(valid_G), "tries_to_first": tries_first_G, "time_sec": round(t1-t0, 2)},
+            "ABS":{"nodes": 1, "programs_found": len(valid_ABS), "tries_to_first": tries_first_ABS, "time_sec": round(t3-t2, 2)},
         }
 
-    stats = measure(task, num_preops=200, seed=11)
-    print("\n=== STATS (200 preops) ===")
+    stats = measure(task, seed=11)
+    print("\n=== STATS ===")
     print(stats)
     # Quick evaluation of shapes on train
     def eval_kind(kind: str):
