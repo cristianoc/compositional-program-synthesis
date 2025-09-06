@@ -261,19 +261,53 @@ def main():
         img[yy1:yy2+1, xx2:xx2+1, :] = color
 
     def save_png(path: str, rgb: np.ndarray):
-        import struct, zlib, binascii
+        import struct, binascii
         H, W, C = rgb.shape
         assert C == 3
         # Build raw bytes with no filter per row
         raw = b''.join(b"\x00" + rgb[i].tobytes() for i in range(H))
+
+        # Deterministic zlib stream with stored (uncompressed) deflate blocks
+        def adler32(data: bytes) -> int:
+            MOD = 65521
+            a = 1
+            b = 0
+            for byte in data:
+                a = (a + byte) % MOD
+                b = (b + a) % MOD
+            return (b << 16) | a
+
+        def zlib_stored(data: bytes) -> bytes:
+            # zlib header: 0x78 0x01 (CMF=0x78, FLG=0x01) satisfies 31-check and FLEVEL=0
+            header = b"\x78\x01"
+            out = [header]
+            i = 0
+            n = len(data)
+            while i < n:
+                chunk = data[i : i + 65535]
+                i += len(chunk)
+                bfinal = 1 if i >= n else 0
+                # Stored block header: 3 bits (BFINAL, BTYPE=00) → at byte boundary => byte is 0x01 for final else 0x00
+                out.append(bytes([bfinal]))
+                L = len(chunk)
+                out.append(L.to_bytes(2, 'little'))
+                out.append((0xFFFF - L).to_bytes(2, 'little'))
+                out.append(chunk)
+            out.append(adler32(data).to_bytes(4, 'big'))
+            return b''.join(out)
+
         # PNG chunks
         def chunk(typ: bytes, data: bytes) -> bytes:
-            return (struct.pack(">I", len(data)) + typ + data +
-                    struct.pack(">I", binascii.crc32(typ + data) & 0xffffffff))
+            return (
+                struct.pack(">I", len(data))
+                + typ
+                + data
+                + struct.pack(">I", binascii.crc32(typ + data) & 0xFFFFFFFF)
+            )
+
         sig = b"\x89PNG\r\n\x1a\n"
         ihdr = struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0)
-        # Use no compression (level=0) to reduce variability across zlib versions
-        idat = zlib.compress(raw, 0)
+        idat = zlib_stored(raw)
         png = sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
         with open(path, "wb") as f:
             f.write(png)
