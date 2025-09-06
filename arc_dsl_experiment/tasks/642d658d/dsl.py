@@ -76,14 +76,24 @@ def detect_overlays(
     min_repeats: int = 2,
     window_shape: Optional[tuple[int, int]] = None,
 ) -> List[dict]:
+    # Map h3/v3 to window_nxm with degenerate shapes so detection/predicate are unified.
+    eff_kind = kind
+    eff_shape: Optional[tuple[int, int]] = window_shape
+    if kind == "h3":
+        eff_kind = "window_nxm"
+        eff_shape = (1, 3)
+    elif kind == "v3":
+        eff_kind = "window_nxm"
+        eff_shape = (3, 1)
+    elif kind == "window_nxm":
+        eff_shape = window_shape if window_shape is not None else WINDOW_SHAPE_DEFAULT
     # For window_nxm, propagate a configurable window shape (defaults to WINDOW_SHAPE_DEFAULT).
-    ws = window_shape if window_shape is not None else (WINDOW_SHAPE_DEFAULT if kind == "window_nxm" else None)
     return detect_pattern_overlays(
         grid,
-        kind=kind,  # type: ignore[arg-type]
+        kind=eff_kind,  # type: ignore[arg-type]
         color=int(color),
         min_repeats=min_repeats,
-        window_shape=ws,
+        window_shape=eff_shape,
     )
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["h3", "v3", "window_nxm"]
@@ -251,8 +261,17 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
 
     def apply(self, state: GridState) -> OverlayContext:
         g = state.grid
-        # Use the configured pattern kind and color for overlays
-        ovs = detect_overlays(g.tolist(), kind=self.kind, color=self.color)
+        # Normalize pattern kind: map h3->window_nxm(1,3), v3->window_nxm(3,1)
+        k = self.kind
+        ws: Optional[tuple[int,int]] = None
+        if k == "h3":
+            k = "window_nxm"; ws = (1,3)
+        elif k == "v3":
+            k = "window_nxm"; ws = (3,1)
+        elif k == "window_nxm":
+            ws = WINDOW_SHAPE_DEFAULT
+        # Use the normalized pattern kind and color for overlays
+        ovs = detect_overlays(g.tolist(), kind=k, color=self.color, window_shape=ws)
         H, W = g.shape
         count = len(ovs)
         max_contrast = max([ov["contrast"] for ov in ovs], default=0.0)
@@ -261,7 +280,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
         stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
         self.absx.overlays = ovs
         self.absx.last_stats = stats
-        return OverlayContext(g, ovs, stats, self.kind, self.color)
+        return OverlayContext(g, ovs, stats, k, self.color)
 
 
 class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
@@ -316,6 +335,17 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
                     continue
                 w_eff = int(len(win[0])) if h_eff>0 else 0
                 if any(len(row) != w_eff for row in win):
+                    continue
+                # Temporary special-cases to mirror h3/v3 semantics for degenerate shapes
+                if h_eff == 1 and w_eff == 3:
+                    a, b = int(win[0][0]), int(win[0][2])
+                    if a == b and a != 0:
+                        flank_colors.append(a)
+                    continue
+                if h_eff == 3 and w_eff == 1:
+                    a, b = int(win[0][0]), int(win[2][0])
+                    if a == b and a != 0:
+                        flank_colors.append(a)
                     continue
                 if h_eff % 2 == 1 and w_eff % 2 == 1:
                     ci = h_eff // 2; cj = w_eff // 2
