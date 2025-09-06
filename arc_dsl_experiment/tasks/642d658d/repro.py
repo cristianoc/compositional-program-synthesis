@@ -136,7 +136,7 @@ def main():
             tried2 += 1
             ok=True
             for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_Wn)
+                y_pred = dsl.predict_window_nxm_uniform_color(pre_f(x), COLOR_Wn)
                 if y_pred != y:
                     ok=False; break
             if ok:
@@ -651,7 +651,7 @@ def main():
     if GENERATE_INDIVIDUAL:
         for i, ex in enumerate(task["train"], start=1):
             g = np.array(ex["input"], dtype=int)
-            pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_Wn)
+            pred = dsl.predict_window_nxm_uniform_color(g.tolist(), COLOR_Wn)
             render_grid_with_overlays(
                 g,
                 pred,
@@ -676,7 +676,7 @@ def main():
 
         # Test pic
         gtest = np.array(task["test"][0]["input"], dtype=int)
-        predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_Wn)
+        predt = dsl.predict_window_nxm_uniform_color(gtest.tolist(), COLOR_Wn)
         render_grid_with_overlays(gtest, predt, f"Test: 1x3", str(images_dir / "overlay_test.png"), kind="window_nxm", color=COLOR_1x3, window_shape=(1,3))
         render_grid_with_overlays(gtest, predt, f"Test: 3x1", str(images_dir / "overlay_test_v.png"), kind="window_nxm", color=COLOR_3x1, window_shape=(3,1))
         render_grid_with_overlays(gtest, predt, f"Test: window_nxm (color={COLOR_Wn})", str(images_dir / "overlay_test_x.png"), kind="window_nxm", color=COLOR_Wn)
