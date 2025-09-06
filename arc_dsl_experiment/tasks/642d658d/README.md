@@ -44,9 +44,9 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 ## 2. Enumeration spaces
 
 - G core: composed color rules only (no pre-ops). Nodes = number of composed rules (currently 70; see repro output).
- - Abstraction: pattern kinds × colors (1–9), plus colorless window mining. Nodes = 3 × 9 + 3 = 30.
+ - Abstraction: pattern kinds × colors (1–9). Nodes = 3 × 9 = 27.
  - Single-pass enumeration: ABS is enumerated once and includes all three `window_nxm` shape instantiations: `(1,3)`, `(3,1)`, and the default window.
- - Typed composition seeds: the only operations that accept `GridState` are the chooser ops for G and the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)` and `OpBrightOverlayAllWindows(window_shape∈{(1,3),(3,1),default})`), followed by kind-appropriate predicates or schema-matching.
+ - Typed composition seeds: the operations that accept `GridState` are the chooser ops for G, the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)`), and universal fixed-schema matchers derived from train+test (e.g., `match_universal_pos(ri,rj)` for 3×3). Aggregators then map matches to a color.
 
 ## 2.1 Operations and Types
 
@@ -66,14 +66,13 @@ Abstraction (A) ops
 |---|---|---|---|
 | `overlay_window_nxm` | `GridState` | `OverlayContext` | Parameterized by `color ∈ {1..9}` and `window_shape ∈ {(1,3),(3,1),default}`. |
 | `uniform_pattern_predicate` | `OverlayContext` | `ColorState` | Center-neighborhood evidence aggregation by shape parity. |
-| `overlay_window_nxm_all` | `GridState` | `OverlayContext` | Colorless: enumerates all full windows for a shape; no center or target color assumed. |
-| `schema_match_across_grid` | `OverlayContext` | `MatchesState` | Matches stored schemas across the entire grid; returns matched subgrids with wildcards omitted. |
-| `uniform_color_from_matches` | `MatchesState` | `ColorState` | Aggregates non-None, non-zero values from matches and returns mode. |
+| `match_fixed_schema` | `GridState` | `MatchesState` | Matches a precomputed universal schema across the grid (e.g., `match_universal_pos(ri,rj)`). |
+| `uniform_color_from_matches` | `MatchesState` | `ColorState` | Aggregates non-None, non-zero values from matches and returns mode. Variants include per-schema mode and exclude-global.
 
 These tables reflect the explicit op registries defined in `dsl.py` (`G_TYPED_OPS` and `A_OP_TYPE_SUMMARY`).
 
-### Colorless window mining
-- Detector kind `window_nxm_all` enumerates every full `n×m` window without selecting a color or assuming a semantic center. This path is now included in enumeration via the schema-matching pipeline (`overlay_window_nxm_all |> schema_match_across_grid |> uniform_color_from_matches`).
+Removed functionality
+- The colorless detector `window_nxm_all` and overlay-based schema matching have been removed. Universal schemas are now computed by direct full-window enumeration and logical intersection (train+test), then used via `match_fixed_schema` in the DSL.
 
 ## 3. Results
 
@@ -90,7 +89,7 @@ These tables reflect the explicit op registries defined in `dsl.py` (`G_TYPED_OP
 
 - `overlay_patterns.py`: overlay detector implementing `window_nxm` (supports `window_shape`; emits full windows with per-window schema).
 - `pattern_mining.py`: generic 1×3 schema miner (used for exploratory analysis; not required for window_nxm detection).
-- `dsl.py`: pipeline wiring, enumeration/printing of programs, and predicate for `window_nxm`.
+- `dsl.py`: pipeline wiring, enumeration/printing of programs, universal schema intersection helpers, fixed-schema matcher, and predicate for `window_nxm`.
 
 ## 4. Window size semantics (`window_nxm`)
 

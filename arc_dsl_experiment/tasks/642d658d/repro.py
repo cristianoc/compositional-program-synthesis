@@ -187,76 +187,7 @@ def main():
                 sprint()
     except Exception as e:
         sprint(f"[warn] failed to print test schemas: {e}")
-    # Print window_nxm_all (colorless) schemas for train and test, for a few shapes
-    try:
-        shapes = [(1,3), (3,1), tuple(dsl.WINDOW_SHAPE_DEFAULT)]
-        for shape in shapes:
-            sprint(f"\n=== Sample window_nxm_all schemas (colorless, shape={shape}) — train ===")
-            for idx, ex in enumerate(task["train"], start=1):
-                g_ex = np.array(ex["input"], dtype=int)
-                ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxm_all", color=0, window_shape=shape)
-                sprint(f"-- train[{idx}] overlays={len(ovs_ex)} --")
-                # Print up to 4 schemas
-                cells_w = 1
-                # compute cell width for alignment across up to 4 schemas (optional)
-                for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                    cells = [str(x) for row in ov.get("schema", []) for x in row]
-                    if cells:
-                        cells_w = max(cells_w, max(len(c) for c in cells))
-                for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                    oid = int(ov["overlay_id"])
-                    cr, cc = int(ov["center_row"]), int(ov["center_col"])
-                    shape_ov = ov.get("window_shape")
-                    if not shape_ov:
-                        shape_ov = [ov.get("window_h"), ov.get("window_w")]
-                    sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) shape {tuple(int(x) for x in shape_ov)}")
-                    schema = ov.get("schema", [])
-                    for row in schema:
-                        sprint(" " + "[" + ", ".join(f"{str(x):>{cells_w}}" for x in row) + "]")
-                    sprint()
-            sprint(f"\n=== Sample window_nxm_all schemas (colorless, shape={shape}) — test ===")
-            for idx, ex in enumerate(task["test"], start=1):
-                g_ex = np.array(ex["input"], dtype=int)
-                ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxm_all", color=0, window_shape=shape)
-                sprint(f"-- test[{idx}] overlays={len(ovs_ex)} --")
-                cells_w = 1
-                for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                    cells = [str(x) for row in ov.get("schema", []) for x in row]
-                    if cells:
-                        cells_w = max(cells_w, max(len(c) for c in cells))
-                for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                    oid = int(ov["overlay_id"])
-                    cr, cc = int(ov["center_row"]), int(ov["center_col"])
-                    shape_ov = ov.get("window_shape")
-                    if not shape_ov:
-                        shape_ov = [ov.get("window_h"), ov.get("window_w")]
-                    sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) shape {tuple(int(x) for x in shape_ov)}")
-                    schema = ov.get("schema", [])
-                    for row in schema:
-                        sprint(" " + "[" + ", ".join(f"{str(x):>{cells_w}}" for x in row) + "]")
-                    sprint()
-    except Exception as e:
-        sprint(f"[warn] failed to print window_nxm_all schemas: {e}")
-    # Demonstrate schema-based matching without color or center
-    try:
-        sprint("\n=== Schema match across grid (colorless, shape=(3,3)) ===")
-        g_ex = np.array(task["train"][0]["input"], dtype=int)
-        ovctx = dsl.OpBrightOverlayAllWindows(window_shape=(3,3)).apply(dsl.GridState(g_ex))
-        mctx = dsl.OpSchemaMatchAcrossGrid(limit_schemas=1).apply(ovctx)
-        sprint(f"matches found: {len(mctx.matches)}")
-        # Print up to 3 example matched windows with None visualized as '.'
-        for i, m in enumerate(mctx.matches[:3], start=1):
-            y1,x1,y2,x2 = m["y1"], m["x1"], m["y2"], m["x2"]
-            sprint(f"match[{i}] region=({y1},{x1})-({y2},{x2})")
-            mg = m.get("match", [])
-            for row in mg:
-                sprint(" [" + ", ".join('.' if v is None else str(int(v)) for v in row) + "]")
-            sprint()
-        # Aggregate a color from matches
-        y_pred = dsl.OpUniformColorFromMatches().apply(mctx).color
-        sprint(f"aggregated color from matches: {y_pred}")
-    except Exception as e:
-        sprint(f"[warn] failed schema match demo: {e}")
+    # (Removed colorless window_nxm_all exploration and schema-match demos)
     # Print combined schema across full windows (aligned)
     try:
         sprint("\n=== Combined schema (window_nxm) ===")
