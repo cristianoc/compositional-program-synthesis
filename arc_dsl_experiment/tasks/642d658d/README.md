@@ -20,7 +20,7 @@
 
 ## Universal matcher mosaic
 - Mosaic view with all train and test examples across universal matcher shapes:
-  - Columns: 1×3, 3×1, WINDOW (default shape)
+  - Columns: 1×3, 3×1, WINDOW (3×3)
   - Each panel shows the input grid with yellow rectangles where `match_universal_pos(shape=...)` finds matches that are consistent with the uniform-neighborhood aggregator; the right panel shows the predicted color.
 
 ![](images/overlay_mosaic.png)
@@ -104,8 +104,7 @@ Artifacts:
 
 Notes:
 - Code is pattern-only.
-- To include universal schema matchers for additional shapes in enumeration programmatically, call:
+ - To include universal schema matchers for specific shapes in enumeration, pass them explicitly:
   ```python
   dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3)])
   ```
-  By default, `(1,3)`, `(3,1)`, and the current `WINDOW_SHAPE_DEFAULT` are included.
