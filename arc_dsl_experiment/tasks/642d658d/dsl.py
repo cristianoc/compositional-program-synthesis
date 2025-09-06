@@ -480,6 +480,64 @@ class OpUniformColorPerSchemaThenMode(Operation[MatchesState, ColorState]):
         return ColorState(int(min(mode_vals)))
 
 
+class OpUniformColorFromMatchesUniformNeighborhood(Operation[MatchesState, ColorState]):
+    input_type = MatchesState
+    output_type = ColorState
+
+    label = "uniform_from_matches_uniform_neighborhood"
+
+    def _neighborhood_positions(self, nr: int, nc: int) -> List[tuple[int,int]]:
+        # Mirror UniformPatternPredicate center-neighborhood semantics by shape parity
+        if nr == 1 and nc == 3:
+            return [(0,0),(0,2)]
+        if nr == 3 and nc == 1:
+            return [(0,0),(2,0)]
+        if nr % 2 == 1 and nc % 2 == 1:
+            ci, cj = nr//2, nc//2
+            return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
+        if nr % 2 == 0 and nc % 2 == 0:
+            i0, i1 = nr//2 - 1, nr//2
+            j0, j1 = nc//2 - 1, nc//2
+            return [(i0,j0),(i0,j1),(i1,j0),(i1,j1)]
+        if nr % 2 == 1 and nc % 2 == 0:
+            ci = nr//2; j0, j1 = nc//2 - 1, nc//2
+            return [(ci,j0),(ci,j1)]
+        if nr % 2 == 0 and nc % 2 == 1:
+            cj = nc//2; i0, i1 = nr//2 - 1, nr//2
+            return [(i0,cj),(i1,cj)]
+        return []
+
+    def apply(self, state: MatchesState) -> ColorState:
+        from collections import Counter
+        picks: List[int] = []
+        for m in state.matches:
+            mg = m.get("match")
+            if mg is None:
+                continue
+            nr = len(mg); nc = len(mg[0]) if nr>0 else 0
+            if nr==0 or nc==0:
+                continue
+            poss = self._neighborhood_positions(nr, nc)
+            if not poss:
+                continue
+            vals: List[int] = []
+            for (i,j) in poss:
+                v = mg[i][j]
+                if v is None:
+                    vals = []
+                    break
+                vals.append(int(v))
+            if not vals:
+                continue
+            if len(set(vals)) == 1 and vals[0] != 0:
+                picks.append(int(vals[0]))
+        if not picks:
+            return ColorState(0)
+        c = Counter(picks)
+        top = max(c.values())
+        mode_vals = [k for k,v in c.items() if v==top]
+        return ColorState(int(min(mode_vals)))
+
 class OpUniformColorFromSchemaConstantsOnly(Operation[MatchesState, ColorState]):
     input_type = MatchesState
     output_type = ColorState
@@ -1420,6 +1478,7 @@ G_TYPED_OPS: List[Operation] = [
 A_OP_TYPE_SUMMARY: List[Tuple[str, str, str]] = [
     ("overlay_window_nxm", "GridState", "OverlayContext"),
     ("uniform_pattern_predicate", "OverlayContext", "ColorState"),
+    ("match_universal_pos(shape=(h,w))", "GridState", "MatchesState"),
 ]
 # ---- G Core: base rules ----
 COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
@@ -1610,6 +1669,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         OpUniformColorFromSchemaConstantsOnly(),
         OpUniformColorFromMatchesExcludeGlobal(),
         OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
+        OpUniformColorFromMatchesUniformNeighborhood(),
     ]
     # Pre-instantiate overlay ops per (shape, color) for kind=window_nxm
     for shape in shapes:
@@ -1619,7 +1679,8 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=shape))
     # Remove colorless overlay pipelines and overlay-based schema filters
     # Add universal fixed-schema matchers derived from task (train+test) for requested shapes and center_value=4
-    shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
+    # Reuse the same default shapes as PatternOverlayExtractor when not overridden
+    shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else list(shapes)
     for ushape in shapes_universal:
         try:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
