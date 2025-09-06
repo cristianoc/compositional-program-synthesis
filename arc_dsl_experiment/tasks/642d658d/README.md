@@ -22,7 +22,7 @@
 - Left: grid with overlays for each pattern kind.
   - `overlay_train_i.png`: h3 (horizontal `(x,c,x)` centers, for chosen color `c`)
   - `overlay_train_i_v.png`: v3 (vertical `(x,c,x)` centers, for chosen color `c`)
-  - `overlay_train_i_x.png`: schema_nxn (one overlay per pixel of color `c`; shown as a cross)
+  - `overlay_train_i_x.png`: window_nxn (one overlay per full n×n window; centerless)
 - Right: predicted color.
 
 | Train 1 (GT=2) | Train 2 (GT=3) |
@@ -34,19 +34,19 @@
 | ![](images/overlay_train_3.png) | ![](images/overlay_test.png) |
 
 ## Abstract
-The `PatternOverlayExtractor` emits overlays for three explicit, color-parameterized pattern kinds: `h3` (horizontal `[X, c, X]` with center color `c`), `v3` (vertical `[X, c, X]`), and `schema_nxn` (one overlay per pixel of color `c`, with an `n×n` window centered at that pixel). The `UniformPatternPredicate` then reads evidence consistent with the selected pattern to output a single color. For `h3`/`v3`, evidence is the nonzero flank color agreed at each center. For `schema_nxn`, evidence is mined variable-equality groups (the “X” positions) across all full `n×n` windows on the current grid; there is no cross-only fallback. Program search enumerates pattern kinds × colors. On this task, multiple (kind, color) settings yield a correct solution.
+The `PatternOverlayExtractor` emits overlays for three kinds: `h3` (horizontal `[X, c, X]` with center color `c`), `v3` (vertical `[X, c, X]`), and `window_nxn` (every full `n×n` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` then reads evidence consistent with the selected pattern to output a single color. For `h3`/`v3`, evidence is the nonzero flank color agreed at each center. For `window_nxn`, evidence comes from uniform, nonzero center neighborhoods inside each window (odd `n`: cross; even `n`: central 2×2). Program search enumerates pattern kinds × colors.
 
 ## 1. Methods (pattern-only)
 
 - `PatternOverlayExtractor(kind=..., color=c)` with kinds and detection rules:
   - `h3` (horizontal `[X, c, X]`): emits one overlay per row position whose 3-length window satisfies the generic schema `[X, c, X]` with a nonzero flank color. Detection uses `pattern_mining.gen_schemas_for_triple` to confirm the pattern.
   - `v3` (vertical `[X, c, X]`): analogous on columns.
-  - `schema_nxn` (centered `n×n` window): emits one overlay per pixel equal to color `c`. The overlay `y1,x1,y2,x2` bounds form an `n×n` box centered on that pixel and clipped to the grid. Window size can be odd or even: for even `n`, extents are asymmetric with up/left of `floor((n-1)/2)` and down/right of `floor(n/2)`.
+  - `window_nxn` (centerless `n×n` windows): emits one overlay per full `n×n` window on the grid. Each overlay includes the raw window and a per-window equality schema.
 
 - `UniformPatternPredicate` (kind-aware evidence → final color):
   - `h3`: At each overlay center, if left and right flanks exist and are equal and nonzero, collect that flank color. Return the mode across centers (tie → min). If no such evidence, falls back to the most frequent valid cross color around overlay centers.
   - `v3`: Same using above/below flanks.
-  - `schema_nxn`: Mines the variable-equality structure across all full `n×n` windows on the current grid around overlay centers of color `c`. Positions that are equal across all windows form variable groups (the “X” positions). For each window, any group whose values are uniform and nonzero contributes that color as evidence. The final prediction is the mode of these group colors (tie → min). There is no cross-only fallback here; if no full windows or no variable groups produce evidence, the predicate yields 0.
+  - `window_nxn`: For each window, if the center neighborhood is uniform and non-zero, collect that color (odd `n`: four-cross; even `n`: central 2×2). Final prediction is the mode (tie → min). No center color is required.
 
 - Program schema (abstraction space):
 ```
@@ -63,7 +63,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 - Programs found (abstraction):
   - `PatternOverlayExtractor(kind=h3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
   - `PatternOverlayExtractor(kind=v3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=schema_nxn, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=window_nxn, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
 
 - Node counts (this run):
   - G core: 4
@@ -71,29 +71,20 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 
 ## Code layout
 
-- `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `schema_nxn` (supports `window_size`; odd/even `n` with asymmetric extents; boxes clipped to grid).
+- `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `window_nxn` (supports `window_size`; emits full windows with per-window schema).
 - `pattern_mining.py`: generic 1×3 schema miner used by `h3` and `v3` detection.
-- `dsl.py`: pipeline wiring, enumeration/printing of programs, and kind-aware predicate. For `schema_nxn`, mining of variable groups and consensus schema string respect `WINDOW_SIZE_DEFAULT`.
+- `dsl.py`: pipeline wiring, enumeration/printing of programs, and kind-aware predicate for `h3`, `v3`, and `window_nxn`.
 
-## 4. Window size semantics (`schema_nxn`)
+## 4. Window size semantics (`window_nxn`)
 
-- `WINDOW_SIZE_DEFAULT`: Global default `n` used by both detection and schema mining/printing. Can be set to any integer `n ≥ 1`.
-- Odd vs even:
-  - Odd `n` has a unique center; window spans `±(n//2)` in both directions.
-  - Even `n` uses asymmetric extents: up/left `floor((n-1)/2)`, down/right `floor(n/2)`. The overlay still records a single center pixel.
-- Full-window requirement: For mining and predicate evidence, only full `n×n` windows entirely inside the grid are considered. Large `n` reduces usable centers (border effects) and can yield no evidence.
-- Small `n` edge cases:
-  - `n=1`: No variable groups of size ≥ 2 can form ⇒ no evidence.
-  - `n=2`: Windows exist, but viable variable groups depend on the data; evidence is collected only from equal, nonzero groups across windows.
-- Very large `n` (e.g., `n=112`): Detection still emits overlays (boxes clip to grid), but if there are no full `n×n` windows, the `schema_nxn` predicate produces no evidence and returns 0. In contrast, `h3`/`v3` are unaffected by `n` and can still solve the task.
+- `WINDOW_SIZE_DEFAULT`: Global default `n` used by detection and printing; any `n ≥ 1`.
+- Full-window requirement: Only full `n×n` windows entirely inside the grid are emitted for `window_nxn`.
+- Odd vs even neighborhoods: odd `n` uses a four-way cross; even `n` uses the central 2×2.
+- Edge cases: `n=1` yields no evidence; larger `n` reduces available windows on small grids.
 
 ## 5. Printed program schemas
 
-When enumerating, programs include a `pattern=...` signature for `schema_nxn` that summarizes the mined consensus over all full windows collected from both train and test inputs at the chosen `n`:
-- Constants: cells that are the same across all windows are printed as their color id.
-- Variables: positions that are equal to each other across all windows form groups and are named `X, Y, Z, ...` (groups of size ≥ 2 only).
-- Wildcards: all other positions print as `*`.
-The `window_size=n` is included alongside the consensus pattern to make the assumption explicit.
+For `window_nxn`, programs include `window_size=n`. Each overlay already carries its per-window schema (`schema` field), so no global consensus string is printed.
 
 ## Reproducing
 
