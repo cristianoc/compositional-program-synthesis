@@ -5,7 +5,7 @@ import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
 
 
-PatternKind = Literal["h3", "v3", "window_nxm"]
+PatternKind = Literal["window_nxm"]
 
 # (No per-grid printing; n×n mining and pretty printers are available in pattern_mining if needed.)
 
@@ -40,7 +40,7 @@ def _emit_overlay(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: i
 def detect_pattern_overlays(
     grid: Iterable[Iterable[int]],
     *,
-    kind: PatternKind = "h3",
+    kind: PatternKind = "window_nxm",
     color: int,
     min_repeats: int = 2,
     dedup_centers: bool = True,
@@ -49,8 +49,6 @@ def detect_pattern_overlays(
     """
     Detect overlays by simple pattern templates.
 
-    - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
-    - kind="v3": emit one overlay per center matching (x, color, x) vertically.
     - kind="window_nxm": emit one overlay per center equal to the selected color with an (n×m) window clipped to the grid. Each overlay carries the window and its per-window schema.
     """
     g = _to_np_grid(grid)
@@ -116,35 +114,6 @@ def detect_pattern_overlays(
                 ov["schema"] = schema
                 overlays.append(ov)
                 overlay_id += 1
-        return overlays
-    elif kind == "h3":
-        # Use generic schema mining to detect [X, color, X] horizontal windows
-        for r in range(H):
-            for c in range(W):
-                if int(g[r, c]) != int(color):
-                    continue
-                if c - 1 < 0 or c + 1 >= W:
-                    continue
-                triple = (int(g[r, c - 1]), int(g[r, c]), int(g[r, c + 1]))
-                schemas = gen_schemas_for_triple(triple)
-                # Preserve prior behavior: require non-zero flank color
-                if ("X", int(color), "X") in schemas and int(triple[0]) != 0:
-                    overlays.append(_emit_overlay(r, c, r, c - 1, r, c + 1, overlay_id))
-                    overlay_id += 1
-        return overlays
-    elif kind == "v3":
-        # Use generic schema mining to detect [X, color, X] on vertical triples
-        for r in range(H):
-            for c in range(W):
-                if int(g[r, c]) != int(color):
-                    continue
-                if r - 1 < 0 or r + 1 >= H:
-                    continue
-                triple = (int(g[r - 1, c]), int(g[r, c]), int(g[r + 1, c]))
-                schemas = gen_schemas_for_triple(triple)
-                if ("X", int(color), "X") in schemas and int(triple[0]) != 0:
-                    overlays.append(_emit_overlay(r, c, r - 1, c, r + 1, c, overlay_id))
-                    overlay_id += 1
         return overlays
     else:
         raise ValueError(f"Unknown pattern kind: {kind}")
