@@ -355,8 +355,7 @@ def predict_with_pattern_kind(grid: List[List[int]], kind: str, color: int) -> i
     out = pipeline.run(gstate)
     assert isinstance(out, ColorState)
     return int(out.color)
-# ===================== Core G: preops & color rules =====================
-# (No pre-ops in this pattern-only system)
+
 # Global/simple color rules
 def rule_argmin_hist(x: np.ndarray) -> int:
     vals, cnt = np.unique(x[x!=0], return_counts=True)
