@@ -45,6 +45,8 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 
 - G core: composed color rules only (no pre-ops). Nodes = number of composed rules (currently 70; see repro output).
 - Abstraction: pattern kinds × colors (1–9), no pre-ops. Nodes = 3 × 9 = 27.
+- Single-pass enumeration: ABS is enumerated once and includes all three `window_nxm` shape instantiations: `(1,3)`, `(3,1)`, and the default window.
+- Typed composition seeds: the only operations that accept `GridState` are the chooser ops for G and the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)`), followed by kind-appropriate predicates.
 
 ## 3. Results
 
