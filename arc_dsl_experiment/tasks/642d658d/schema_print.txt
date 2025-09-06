@@ -1,88 +1,88 @@
 
-=== Sample window_nxn schemas (train) ===
+=== Sample window_nxm schemas (train) ===
 -- train[1] overlays=4 --
-overlay_id 1  center ( 4, 20) n 3
+overlay_id 1  center ( 4, 20) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 2  center ( 6,  5) n 3
+overlay_id 2  center ( 6,  5) shape (3, 3)
  [X, Y, *]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 3  center (20,  4) n 3
+overlay_id 3  center (20,  4) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [*, Y, X]
 
-overlay_id 4  center (25, 16) n 3
+overlay_id 4  center (25, 16) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [*, Y, X]
 
 -- train[2] overlays=6 --
-overlay_id 1  center ( 5,  8) n 3
+overlay_id 1  center ( 5,  8) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 2  center ( 6, 19) n 3
+overlay_id 2  center ( 6, 19) shape (3, 3)
  [X, Y, *]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 3  center (10,  5) n 3
+overlay_id 3  center (10,  5) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 4  center (13, 14) n 3
+overlay_id 4  center (13, 14) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [*, Y, X]
 
 -- train[3] overlays=3 --
-overlay_id 1  center ( 4, 16) n 3
+overlay_id 1  center ( 4, 16) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 2  center ( 7,  5) n 3
+overlay_id 2  center ( 7,  5) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 3  center (14, 11) n 3
+overlay_id 3  center (14, 11) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [*, Y, X]
 
 
-=== Sample window_nxn schemas (test) ===
+=== Sample window_nxm schemas (test) ===
 -- test[1] overlays=5 --
-overlay_id 1  center ( 4,  3) n 3
+overlay_id 1  center ( 4,  3) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 2  center ( 9,  8) n 3
+overlay_id 2  center ( 9,  8) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 3  center (11, 17) n 3
+overlay_id 3  center (11, 17) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
-overlay_id 4  center (22,  5) n 3
+overlay_id 4  center (22,  5) shape (3, 3)
  [X, Y, X]
  [Y, 4, Y]
  [X, Y, X]
 
 
-=== Combined schema (window_nxn) ===
+=== Combined schema (window_nxm) ===
  [*, X, *]
  [X, 4, X]
  [*, X, *]

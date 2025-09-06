@@ -5,7 +5,7 @@ import numpy as np
 from pattern_mining import gen_schemas_for_triple  # generic 1x3 schema miner
 
 
-PatternKind = Literal["h3", "v3", "window_nxn"]
+PatternKind = Literal["h3", "v3", "window_nxm"]
 
 # (No per-grid printing; n×n mining and pretty printers are available in pattern_mining if needed.)
 
@@ -44,28 +44,33 @@ def detect_pattern_overlays(
     color: int,
     min_repeats: int = 2,
     dedup_centers: bool = True,
-    window_size: Optional[int] = None,
+    window_shape: Optional[tuple[int, int]] = None,
 ) -> List[dict]:
     """
     Detect overlays by simple pattern templates.
 
     - kind="h3": emit one overlay per center matching (x, color, x) horizontally.
     - kind="v3": emit one overlay per center matching (x, color, x) vertically.
-    - kind="window_nxn": emit one overlay per full n×n window across the grid (no center/color requirement). Each overlay carries the window's schema.
+    - kind="window_nxm": emit one overlay per center equal to the selected color with an (n×m) window clipped to the grid. Each overlay carries the window and its per-window schema.
     """
     g = _to_np_grid(grid)
     H, W = g.shape
     overlays: List[dict] = []
     overlay_id = 1
 
-    if kind == "window_nxn":
-        # Match prior schema_nxn semantics: one overlay per pixel equal to the given color,
-        # with an n×n window centered at that pixel and clipped to the grid.
-        n = int(window_size) if window_size is not None else 3
-        if n < 1:
-            raise ValueError("window_size must be >= 1")
-        up_left = (n - 1) // 2
-        down_right = n // 2
+    if kind == "window_nxm":
+        # One overlay per pixel equal to the given color,
+        # with an n×m window centered at that pixel and clipped to the grid.
+        if window_shape is None:
+            hh, ww = 3, 3
+        else:
+            hh, ww = int(window_shape[0]), int(window_shape[1])
+        if hh < 1 or ww < 1:
+            raise ValueError("window_shape dims must be >= 1")
+        up = (hh - 1) // 2
+        down = hh // 2
+        left = (ww - 1) // 2
+        right = ww // 2
 
         VARS = (
             "X", "Y", "Z", "U", "V", "W", "Q", "R", "S", "A", "B", "C",
@@ -95,11 +100,13 @@ def detect_pattern_overlays(
             for c in range(W):
                 if int(g[r, c]) != int(color):
                     continue
-                y1 = max(0, r - up_left); x1 = max(0, c - up_left)
-                y2 = min(H - 1, r + down_right); x2 = min(W - 1, c + down_right)
+                y1 = max(0, r - up); x1 = max(0, c - left)
+                y2 = min(H - 1, r + down); x2 = min(W - 1, c + right)
                 ov = _emit_overlay(r, c, y1, x1, y2, x2, overlay_id)
                 win = g[y1 : y2 + 1, x1 : x2 + 1]
-                ov["window_size"] = int(win.shape[0])
+                ov["window_h"] = int(win.shape[0])
+                ov["window_w"] = int(win.shape[1])
+                ov["window_shape"] = [int(win.shape[0]), int(win.shape[1])]
                 ov["window"] = win.astype(int).tolist()
                 schema = window_schema(win)
                 # Ensure the center position within the window is marked as the constant selected color
