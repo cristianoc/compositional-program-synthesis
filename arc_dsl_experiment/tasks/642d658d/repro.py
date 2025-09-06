@@ -349,7 +349,7 @@ def main():
             # Build rows
             rows = []
             row_labels = []
-            kinds = [("1x3", (1,3)), ("3x1", (3,1)), ("WINDOW", (3,3))]
+            kinds = [(f"{h}x{w}", (h,w)) for (h,w) in shapes]
             for idx, ex in enumerate(task["train"], start=1):
                 g = np.array(ex["input"], dtype=int)
                 pan = []
