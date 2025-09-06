@@ -1,12 +1,17 @@
 # -----------------------------------------------------------------------------
 # Overlay Abstraction Experiment Utilities
 # This module implements:
-#  • Overlay extractor: detect_bright_overlays  (README_clean.md §2.2, “Methods: Overlay extractor”)
-#  • Abstraction: PatternOverlayExtractor       (pattern overlays + stored overlays)
-#  • Pattern predicate & predictor pipeline     (UniformPatternPredicate; §2.3; §5 “Analysis”)
-#  • G core color rules incl. local-structure   (README_clean.md §2.4 “Extensions to G”)
-#  • Program enumeration & pretty-print helpers (README_clean.md §4 “Results”)
-# For numeric defaults of the detector, see README_clean.md: “Detector defaults (for reproducibility)”.
+#  • Overlay extractor: detect_bright_overlays  (README_clean.md §2.2, "Methods: Overlay extractor")
+#  • Abstraction: universal schema matcher       (match_universal_pos)
+#  • Aggregators                                 (UniformColorFrom...)
+#  • Typed enumeration & printing
+#  • Results reproduction harness
+#  • Figures (PNG) generator
+#  • Evaluation on train/test
+#  • Abstraction: universal schema matcher        (schema matchers)
+#  • Pattern predicate & predictor pipeline       (removed)
+#  • G composed rules as reference baseline
+# For numeric defaults of the detector, see README_clean.md: "Detector defaults (for reproducibility)"
 # -----------------------------------------------------------------------------
 
 
@@ -84,270 +89,28 @@ class Pipeline:
             cur = op.apply(cur)  # type: ignore[arg-type]
         return cur
 # ===================== Overlay Extractor (pattern-based) =====================
-def detect_overlays(
-    grid: Iterable[Iterable[int]],
-    *,
-    kind: str = "window_nxm",
-    color: int,
-    min_repeats: int = 2,
-    window_shape: Optional[tuple[int, int]] = None,
-) -> List[dict]:
-    # For window_nxm, propagate a configurable window shape (defaults to WINDOW_SHAPE_DEFAULT).
-    eff_kind = kind
-    eff_shape: Optional[tuple[int, int]] = window_shape if window_shape is not None else (WINDOW_SHAPE_DEFAULT if kind == "window_nxm" else None)
-    return detect_pattern_overlays(
-        grid,
-        kind=eff_kind,  # type: ignore[arg-type]
-        color=int(color),
-        min_repeats=min_repeats,
-        window_shape=eff_shape,
-    )
+# Removed overlay-based detection and helpers in favor of universal schema matching.
 # Pattern kinds considered during search/enumeration
 PATTERN_KINDS: List[str] = ["window_nxm"]
 # Default window shape for window_nxm (n×m with n,m≥1). Used across detection and pretty-printing.
 WINDOW_SHAPE_DEFAULT: tuple[int, int] = (3, 3)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
-def pattern_present_in_all_examples(task: Dict, kind: str, color: int, *, window_shape: Optional[tuple[int,int]] = None) -> bool:
-    # task is ARC-like dict with "train" and "test" splits
-    for split in ("train", "test"):
-        for ex in task.get(split, []):
-            g = ex["input"]
-            ovs = detect_overlays(g, kind=kind, color=int(color), window_shape=window_shape)
-            if len(ovs) == 0:
-                return False
-    return True
+# Removed overlay-based pattern presence checks.
 
 # ---------------------- Combined schema for window_nxm ----------------------
-def _gather_full_windows_for_grid(g: np.ndarray, color: int, *, window_shape: tuple[int,int]) -> List[np.ndarray]:
-    """Collect all full n×m windows centered on pixels equal to color.
+# Removed overlay window gathering; universal schemas are built via _iterate_full_windows + builders below.
 
-    Only returns windows fully inside the grid (no clipping)."""
-    wins: List[np.ndarray] = []
-    H, W = g.shape
-    hh, ww = int(window_shape[0]), int(window_shape[1])
-    if hh < 1 or ww < 1:
-        return wins
-    up = (hh - 1) // 2
-    down = hh // 2
-    left = (ww - 1) // 2
-    right = ww // 2
-    rmin, rmax = up, H - 1 - down
-    cmin, cmax = left, W - 1 - right
-    if rmin > rmax or cmin > cmax:
-        return wins
-    for r in range(rmin, rmax + 1):
-        for c in range(cmin, cmax + 1):
-            if int(g[r, c]) != int(color):
-                continue
-            wins.append(g[r-up:r+down+1, c-left:c+right+1].copy())
-    return wins
-
-def _gather_full_windows_for_task(task: Dict, color: int, *, window_shape: tuple[int,int]) -> List[np.ndarray]:
-    wins: List[np.ndarray] = []
-    import numpy as np
-    for split in ("train","test"):
-        for ex in task.get(split, []):
-            g = np.asarray(ex["input"], dtype=int)
-            wins.extend(_gather_full_windows_for_grid(g, color, window_shape=window_shape))
-    return wins
-
-def combined_window_nxm_schema(task: Dict, color: int, *, window_shape: tuple[int,int]) -> List[List[Union[int, str]]]:
-    """Return the consensus schema matrix across all full windows for the given color and n×m."""
-    wins = _gather_full_windows_for_task(task, color, window_shape=window_shape)
-    hh, ww = int(window_shape[0]), int(window_shape[1])
-    if not wins:
-        return [["*"] * ww for _ in range(hh)]
-    # Determine constants per position across windows
-    pos_vals: List[set[int]] = []
-    for i in range(hh):
-        for j in range(ww):
-            vals = {int(win[i, j]) for win in wins}
-            pos_vals.append(vals)
-    is_const = [len(s) == 1 for s in pos_vals]
-    const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
-
-    # Equality relation among non-constant positions: equal across all windows
-    npos = hh * ww
-    adj = [[False] * npos for _ in range(npos)]
-    for a in range(npos):
-        adj[a][a] = True
-    for a in range(npos):
-        if is_const[a]:
-            continue
-        ai, aj = divmod(a, ww)
-        for b in range(a + 1, npos):
-            if is_const[b]:
-                continue
-            bi, bj = divmod(b, ww)
-            equal_all = True
-            for win in wins:
-                if int(win[ai, aj]) != int(win[bi, bj]):
-                    equal_all = False
-                    break
-            if equal_all:
-                adj[a][b] = adj[b][a] = True
-
-    # Connected components of equal positions (size >= 2 → variable group)
-    visited = [False] * npos
-    comps: List[List[int]] = []
-    for v in range(npos):
-        if visited[v] or is_const[v]:
-            continue
-        stack = [v]
-        visited[v] = True
-        comp = [v]
-        while stack:
-            u = stack.pop()
-            for w in range(npos):
-                if not visited[w] and adj[u][w]:
-                    visited[w] = True
-                    stack.append(w)
-                    comp.append(w)
-        if len(comp) >= 2:
-            comps.append(sorted(comp))
-
-    # Assemble schema grid
-    schema: List[List[Union[int, str]]] = [["*" for _ in range(ww)] for _ in range(hh)]
-    for p in range(npos):
-        if is_const[p]:
-            i, j = divmod(p, ww)
-            schema[i][j] = int(const_val[p]) if const_val[p] is not None else "*"
-    var_tokens = ("X", "Y", "Z", "U", "V", "W")
-    next_var = 0
-    for comp in comps:
-        tok = var_tokens[min(next_var, len(var_tokens) - 1)]
-        next_var += 1
-        for p in comp:
-            i, j = divmod(p, ww)
-            schema[i][j] = tok
-    return schema
-
- 
 # ===================== Abstraction & Predicates =====================
-class PatternOverlayExtractor:
-    def __init__(self):
-        self.overlays: List[dict] = []
-        self.last_stats: Dict[str, float] = {}
-
+# Removed PatternOverlayExtractor and overlay-based operations.
 
 # Typed-DSL operations corresponding to the above components
 
 # ===================== A Ops (Overlay Abstraction) =====================
-class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
-    input_type = GridState
-    output_type = OverlayContext
-
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "window_nxm", color: Optional[int] = None, window_shape: Optional[tuple[int,int]] = None):
-        self.absx = absx or PatternOverlayExtractor()
-        self.kind = kind
-        if color is None:
-            raise ValueError("OpBrightOverlayIdentity requires explicit color")
-        self.color = int(color)
-        self.window_shape = tuple(window_shape) if window_shape is not None else None
-        # Base label; parameters may be appended in pretty-printing
-        self.label = f"overlay_{self.kind}"
-
-    def apply(self, state: GridState) -> OverlayContext:
-        g = state.grid
-        # Use configured pattern kind and default shape where applicable
-        k = self.kind
-        # Select window shape override if provided, else default for kind
-        ws: Optional[tuple[int,int]] = None
-        if k == "window_nxm":
-            ws = self.window_shape if self.window_shape is not None else WINDOW_SHAPE_DEFAULT
-        # Use the pattern kind and color for overlays
-        ovs = detect_overlays(g.tolist(), kind=k, color=self.color, window_shape=ws)
-        H, W = g.shape
-        count = len(ovs)
-        max_contrast = max([ov["contrast"] for ov in ovs], default=0.0)
-        total_area = sum([ov["area"] for ov in ovs]) if ovs else 0
-        total_area_frac = float(total_area) / float(H * W) if H * W > 0 else 0.0
-        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
-        self.absx.overlays = ovs
-        self.absx.last_stats = stats
-        return OverlayContext(g, ovs, stats, k, self.color)
+# Removed overlay ops; abstraction now starts from schema matchers directly.
 
 
-class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
-    input_type = OverlayContext
-    output_type = ColorState
-    label = "uniform_pattern_predicate"
-
-    def apply(self, state: OverlayContext) -> ColorState:
-        # Predicts a single output color from pattern overlays.
-        # Semantics by kind:
-        #  - window_nxm: center-neighborhood evidence with special cases for degenerate shapes
-        # If no kind-specific evidence is found, returns 0 (no guess).
-        g = state.grid
-        from collections import Counter
-        flank_colors: List[int] = []
-        kind = getattr(state, "kind", None)
-        # Color is optional (colorless overlays supported); predicate does not require it
-        sel_color = getattr(state, "color", None)
-        # Collect evidence depending on kind
-        for ov in state.overlays:
-            r, c = ov["center_row"] - 1, ov["center_col"] - 1
-            if kind == "window_nxm":
-                # Previous centerless rule: derive evidence from the window center neighborhood only.
-                # For center region (rows CR, cols CC):
-                #  - odd×odd: 4-way cross around true center
-                #  - even×even: central 2×2 block
-                #  - odd×even: central 1×2 block
-                #  - even×odd: central 2×1 block.
-                win = ov.get("window")
-                if win is None:
-                    y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
-                    win_arr = g[y1:y2+1, x1:x2+1].copy()
-                    win = win_arr.astype(int).tolist()
-                h_eff = int(len(win)) if hasattr(win, "__len__") else 0
-                if h_eff <= 0:
-                    continue
-                w_eff = int(len(win[0])) if h_eff>0 else 0
-                if any(len(row) != w_eff for row in win):
-                    continue
-                # Temporary special-cases to mirror 1×3 (horizontal) and 3×1 (vertical) semantics for degenerate shapes
-                if h_eff == 1 and w_eff == 3:
-                    a, b = int(win[0][0]), int(win[0][2])
-                    if a == b and a != 0:
-                        flank_colors.append(a)
-                    continue
-                if h_eff == 3 and w_eff == 1:
-                    a, b = int(win[0][0]), int(win[2][0])
-                    if a == b and a != 0:
-                        flank_colors.append(a)
-                    continue
-                if h_eff % 2 == 1 and w_eff % 2 == 1:
-                    ci = h_eff // 2; cj = w_eff // 2
-                    if ci-1 < 0 or ci+1 >= h_eff or cj-1 < 0 or cj+1 >= w_eff:
-                        continue
-                    vals = [int(win[ci-1][cj]), int(win[ci+1][cj]), int(win[ci][cj-1]), int(win[ci][cj+1])]
-                    if len(set(vals)) == 1 and vals[0] != 0:
-                        flank_colors.append(int(vals[0]))
-                elif h_eff % 2 == 0 and w_eff % 2 == 0:
-                    i0 = h_eff // 2 - 1; i1 = h_eff // 2
-                    j0 = w_eff // 2 - 1; j1 = w_eff // 2
-                    vals = [int(win[i0][j0]), int(win[i0][j1]), int(win[i1][j0]), int(win[i1][j1])]
-                    if len(set(vals)) == 1 and vals[0] != 0:
-                        flank_colors.append(int(vals[0]))
-                elif h_eff % 2 == 1 and w_eff % 2 == 0:
-                    ci = h_eff // 2
-                    j0 = w_eff // 2 - 1; j1 = w_eff // 2
-                    vals = [int(win[ci][j0]), int(win[ci][j1])]
-                    if len(set(vals)) == 1 and vals[0] != 0:
-                        flank_colors.append(int(vals[0]))
-                elif h_eff % 2 == 0 and w_eff % 2 == 1:
-                    cj = w_eff // 2
-                    i0 = h_eff // 2 - 1; i1 = h_eff // 2
-                    vals = [int(win[i0][cj]), int(win[i1][cj])]
-                    if len(set(vals)) == 1 and vals[0] != 0:
-                        flank_colors.append(int(vals[0]))
-        if flank_colors:
-            cnt = Counter(flank_colors); top = max(cnt.values())
-            cands = [k for k,v in cnt.items() if v==top]
-            return ColorState(int(min(cands)))
-        # No evidence from required pattern; return 0 (no fallback to cross-only)
-        return ColorState(0)
+## Removed: OpUniformPatternPredicate and overlay-based predicates.
 
 
 def _schema_match_window(schema: List[List[Union[int, str]]], win: np.ndarray) -> Optional[List[List[Optional[int]]]]:
@@ -484,7 +247,7 @@ class OpUniformColorFromMatchesUniformNeighborhood(Operation[MatchesState, Color
     input_type = MatchesState
     output_type = ColorState
 
-    label = "uniform_from_matches_uniform_neighborhood"
+    label = "e "
 
     def _neighborhood_positions(self, nr: int, nc: int) -> List[tuple[int,int]]:
         # Mirror UniformPatternPredicate center-neighborhood semantics by shape parity
@@ -629,62 +392,14 @@ class OpUniformColorFromMatchesExcludeGlobal(Operation[MatchesState, ColorState]
         return ColorState(_mode_int(vals_out))
 
 # Composed program body used in abstraction space: PatternOverlayExtractor |> UniformPatternPredicate |> OutputAgreedColor.
-def predict_window_nxm_uniform_color(grid: List[List[int]], color: int) -> int:
-    # Typed pipeline: Grid -> OverlayContext -> Color
-    gstate = GridState(np.asarray(grid, dtype=int))
-    pipeline = Pipeline([
-        OpBrightOverlayIdentity(kind="window_nxm", color=color),
-        OpUniformPatternPredicate(),
-    ])
-    out = pipeline.run(gstate)
-    assert isinstance(out, ColorState)
-    return int(out.color)
+## Removed: predict_window_nxm_uniform_color (overlay-based).
 
-def predict_with_pattern_kind(grid: List[List[int]], kind: str, color: int) -> int:
-    gstate = GridState(np.asarray(grid, dtype=int))
-    pipeline = Pipeline([
-        OpBrightOverlayIdentity(kind=kind, color=color),
-        OpUniformPatternPredicate(),
-    ])
-    out = pipeline.run(gstate)
-    assert isinstance(out, ColorState)
-    return int(out.color)
+## Removed: predict_with_pattern_kind (overlay-based).
 
 # Removed OpBrightOverlayAllWindows (colorless overlay); use direct window enumeration helpers instead
 
 
-class OpFilterWindowsCenterValue(Operation[OverlayContext, OverlayContext]):
-    input_type = OverlayContext
-    output_type = OverlayContext
-
-    def __init__(self, const_value: int):
-        self.const_value = int(const_value)
-        self.label = f"filter_windows_center({self.const_value})"
-
-    def apply(self, state: OverlayContext) -> OverlayContext:
-        target = int(self.const_value)
-        ovs: List[dict] = []
-        for ov in state.overlays:
-            win = ov.get("window")
-            if win is None:
-                continue
-            nr = len(win); nc = len(win[0]) if nr>0 else 0
-            if nr==0 or nc==0:
-                continue
-            ci, cj = nr//2, nc//2
-            try:
-                if int(win[ci][cj]) == target:
-                    ovs.append(ov)
-            except Exception:
-                continue
-        g = state.grid
-        H,W = g.shape
-        count = len(ovs)
-        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
-        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
-        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
-        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
-        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+## Removed: OpFilterWindowsCenterValue (overlay-based).
 
 
 def _build_combined_schema_from_windows(wins: List[np.ndarray]) -> List[List[Union[int, str]]]:
@@ -763,7 +478,7 @@ class OpMatchCombinedSchemaAcrossGrid(Operation[OverlayContext, MatchesState]):
         self.label = "match_combined_schema"
 
     def apply(self, state: OverlayContext) -> MatchesState:
-        # Build combined schema from current overlays’ windows, then match it across the grid
+        # Build combined schema from current overlays' windows, then match it across the grid
         wins: List[np.ndarray] = []
         for ov in state.overlays:
             win = ov.get("window")
@@ -1121,15 +836,7 @@ def debug_check_universal_intersection(task: Dict, *, window_shape: tuple[int,in
     for row in inter:
         print(" ", "[" + ", ".join(str(x) for x in row) + "]")
 
-def predict_with_pattern_kind_shape(grid: List[List[int]], kind: str, color: int, *, window_shape: Optional[tuple[int,int]]) -> int:
-    gstate = GridState(np.asarray(grid, dtype=int))
-    pipeline = Pipeline([
-        OpBrightOverlayIdentity(kind=kind, color=color, window_shape=window_shape),
-        OpUniformPatternPredicate(),
-    ])
-    out = pipeline.run(gstate)
-    assert isinstance(out, ColorState)
-    return int(out.color)
+## Removed: predict_with_pattern_kind_shape (overlay-based).
 
 # Local-structure color rules
 def _cross4_vals_any(g: np.ndarray, r: int, c: int):
@@ -1476,8 +1183,6 @@ G_TYPED_OPS: List[Operation] = [
 # A ops: two-stage pipeline types (GridState->OverlayContext, OverlayContext->ColorState)
 # Overlay extractor is parameterized by kind, color, and optional shape; predicate is fixed.
 A_OP_TYPE_SUMMARY: List[Tuple[str, str, str]] = [
-    ("overlay_window_nxm", "GridState", "OverlayContext"),
-    ("uniform_pattern_predicate", "OverlayContext", "ColorState"),
     ("match_universal_pos(shape=(h,w))", "GridState", "MatchesState"),
 ]
 # ---- G Core: base rules ----
@@ -1656,13 +1361,9 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             programs_G.append(name)
     total_G = len(COLOR_RULES)
 
-    # Abstractions: enumerate (overlay->predicate) and universal fixed-schema pipelines (no colorless overlays)
-    colors = list(range(1, 10))
+    # Abstractions: enumerate universal fixed-schema pipelines only (no overlay-based seeds)
     shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
-    # Node count heuristic: seeds = (window_nxm × colors × shapes)
-    total_ABS = len(PATTERN_KINDS) * len(colors) * len(shapes)
     abs_ops: List[Operation] = [
-        OpUniformPatternPredicate(),
         OpUniformColorFromMatches(),
         OpUniformColorPerSchemaThenMode(),
         OpUniformColorPerSchemaThenMode(cross_only=False),
@@ -1671,38 +1372,27 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
         OpUniformColorFromMatchesUniformNeighborhood(),
     ]
-    # Pre-instantiate overlay ops per (shape, color) for kind=window_nxm
-    for shape in shapes:
-        for c in colors:
-            if not pattern_present_in_all_examples(task, "window_nxm", c, window_shape=shape):
-                continue
-            abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=shape))
-    # Remove colorless overlay pipelines and overlay-based schema filters
     # Add universal fixed-schema matchers derived from task (train+test) for requested shapes and center_value=4
     # Reuse the same default shapes as PatternOverlayExtractor when not overridden
     shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else list(shapes)
+    matcher_seeds = 0
     for ushape in shapes_universal:
         try:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
             if uni_schemas:
                 schemas_list = list(uni_schemas.values())
                 abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
+                matcher_seeds += 1
         except Exception:
             continue
+    # Node count heuristic: number of matcher seeds
+    total_ABS = matcher_seeds
     # Enumerate up to depth 3 to allow schema-matching chains
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_ABS = []
     for name, seq in winners_abs:
         # Pretty-print sequences in a readable, parameterized style
-        if len(seq) == 2 and isinstance(seq[0], OpBrightOverlayIdentity) and isinstance(seq[1], OpUniformPatternPredicate):
-            ov: OpBrightOverlayIdentity = seq[0]  # type: ignore[assignment]
-            shape = ov.window_shape if ov.window_shape is not None else (WINDOW_SHAPE_DEFAULT if ov.kind == "window_nxm" else None)
-            extra = f", window_shape={shape}" if shape is not None else ""
-            programs_ABS.append(
-                f"PatternOverlayExtractor(kind={ov.kind}, color={ov.color}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
-            )
-        
-        elif len(seq) == 2 and isinstance(seq[0], (OpMatchFixedSchema, OpMatchAnyUniversalSchemas)) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches)):
+        if len(seq) == 2 and isinstance(seq[0], (OpMatchFixedSchema, OpMatchAnyUniversalSchemas)) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches, OpUniformColorFromMatchesUniformNeighborhood)):
             m0 = seq[0]
             aggname = seq[1].__class__.__name__
             programs_ABS.append(f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}")
@@ -1744,21 +1434,21 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     t1=time.perf_counter()
     # ABS (typed enumeration including schema matching chains)
     t2=time.perf_counter()
-    colors = list(range(1,10))
     shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
-    # Build ABS ops as in enumerate_programs_for_task
     abs_ops: List[Operation] = [
-        OpUniformPatternPredicate(), OpUniformColorFromMatches(), OpUniformColorPerSchemaThenMode(), OpUniformColorFromSchemaConstantsOnly(), OpUniformColorFromMatchesExcludeGlobal()
+        OpUniformColorFromMatches(), OpUniformColorPerSchemaThenMode(), OpUniformColorFromSchemaConstantsOnly(), OpUniformColorFromMatchesExcludeGlobal(), OpUniformColorFromMatchesUniformNeighborhood(), OpUniformColorPerSchemaThenMode(cross_only=False), OpUniformColorFromMatchesExcludeGlobal(cross_only=True)
     ]
-    for shape in shapes:
-        for c in colors:
-            if not pattern_present_in_all_examples(task, "window_nxm", c, window_shape=shape):
-                continue
-            abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=shape))
-    # No colorless overlay ops here
+    for ushape in shapes:
+        try:
+            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            if uni_schemas:
+                schemas_list = list(uni_schemas.values())
+                abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
+        except Exception:
+            pass
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     t3=time.perf_counter()
-    nodes_abs = len(PATTERN_KINDS)*9*3 + 3  # add 3 colorless overlay seeds
+    nodes_abs = 3  # one matcher seed per shape (default shapes)
     return {
         "G":{"nodes": len(COLOR_RULES), "programs_found": len(valid_G),
              "tries_to_first": tries_first, "time_sec": t1-t0},

@@ -23,40 +23,16 @@ dsl = reload(dsl)
 
 TASK_PATH = str(HERE / "task.json")
 
-def _best_color_for_kind(task, kind: str):
-    train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    best_c, best_ok = None, -1
-    for c in range(1,10):
-        ok = 0
-        for x,y in train_pairs:
-            yp = dsl.predict_with_pattern_kind(x.tolist(), kind, c)
-            ok += int(yp == y)
-        if ok > best_ok:
-            best_ok = ok; best_c = c
-    return int(best_c) if best_c is not None else 1
+# Removed overlay-based predictors and color search
 
 
 def main():
     task = json.loads(Path(TASK_PATH).read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    # choose best colors per kind on train
-    def _best_color_for_shape(shape):
-        from importlib import reload
-        import dsl as _dsl
-        reload(_dsl)
-        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
-        return _best_color_for_kind(task, "window_nxm")
-
-    # Snapshot the base default shape before any overrides
-    BASE_DEFAULT_SHAPE = tuple(dsl.WINDOW_SHAPE_DEFAULT)
-    COLOR_1x3 = _best_color_for_shape((1,3))
-    COLOR_3x1 = _best_color_for_shape((3,1))
-    COLOR_Wn = _best_color_for_shape(BASE_DEFAULT_SHAPE)
 
     # Enumerate once: both G and ABS (ABS includes all three overlay shape instantiations)
     from importlib import reload
     reload(dsl)
-    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', BASE_DEFAULT_SHAPE)
     res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=[(1,3),(3,1),(3,3)])
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
@@ -98,109 +74,31 @@ def main():
     stats = measure(task, seed=11)
     print("\n=== STATS ===")
     print(stats)
-    # Quick evaluation of shapes on train
-    def eval_kind(kind: str):
-        best_c = _best_color_for_kind(task, kind)
-        res = []
-        for x,y in train_pairs:
-            yp = dsl.predict_with_pattern_kind(x.tolist(), kind, best_c)
-            res.append(int(yp==y))
-        return sum(res), len(res), best_c
-
-    def eval_shape(shape):
-        from importlib import reload
-        import dsl as _dsl
-        reload(_dsl)
-        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
-        res = []
-        for x,y in train_pairs:
-            yp = _dsl.predict_with_pattern_kind(x.tolist(), "window_nxm", COLOR_Wn)
-            res.append(int(yp==y))
-        return sum(res), len(res)
-    k_13_ok, k_total = eval_shape((1,3))
-    k_31_ok, _ = eval_shape((3,1))
-    print(f"\n=== Pattern eval (train acc) ===\n 1x3: {k_13_ok}/{k_total}\n 3x1: {k_31_ok}/{k_total}")
-    # Test-set predictions (no GT in ARC test; we just report)
-    gtest = np.array(task["test"][0]["input"], dtype=int)
-    from importlib import reload
-    reload(dsl)
-    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', (1,3))
-    pred_13 = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_1x3)
-    reload(dsl)
-    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', (3,1))
-    pred_31 = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_3x1)
-    reload(dsl)
-    pred_wn = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_Wn)
-    print(f"Test predictions: 1x3={pred_13} 3x1={pred_31} window_nxm={pred_wn}")
+    # Removed overlay-based evaluation and predictions
     # Prepare capture for schema output
     schema_lines: list[str] = []
     def sprint(msg: str = ""):
         print(msg)
         schema_lines.append(msg)
 
-    # Print a few window_nxm schemas for inspection (all train examples)
+    # Print intersected universal schemas per shape (train+test)
     try:
-        sprint("\n=== Sample window_nxm schemas (train) ===")
-        def _print_schema_aligned(schema):
-            # Determine max cell width across schema for alignment
-            cells = [str(x) for row in schema for x in row]
-            w = max((len(c) for c in cells), default=1)
-            for row in schema:
-                line = "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]"
-                sprint(" " + line)
-        for idx, ex in enumerate(task["train"], start=1):
-            g_ex = np.array(ex["input"], dtype=int)
-            ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxm", color=COLOR_Wn)
-            sprint(f"-- train[{idx}] overlays={len(ovs_ex)} --")
-            for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                oid = int(ov["overlay_id"])
-                cr, cc = int(ov["center_row"]), int(ov["center_col"])
-                shape = ov.get("window_shape")
-                if not shape:
-                    shape = [ov.get("window_h"), ov.get("window_w")]
-                sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) shape {tuple(int(x) for x in shape)}")
-                schema = ov.get("schema", [])
-                _print_schema_aligned(schema)
-                sprint()
-    except Exception as e:
-        sprint(f"[warn] failed to print schemas: {e}")
-    # Print a few window_nxm schemas for test examples as well
-    try:
-        sprint("\n=== Sample window_nxm schemas (test) ===")
-        for idx, ex in enumerate(task["test"], start=1):
-            g_ex = np.array(ex["input"], dtype=int)
-            ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxm", color=COLOR_Wn)
-            sprint(f"-- test[{idx}] overlays={len(ovs_ex)} --")
-            for ov in ovs_ex[:min(4, len(ovs_ex))]:
-                oid = int(ov["overlay_id"])
-                cr, cc = int(ov["center_row"]), int(ov["center_col"])
-                shape = ov.get("window_shape")
-                if not shape:
-                    shape = [ov.get("window_h"), ov.get("window_w")]
-                sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) shape {tuple(int(x) for x in shape)}")
-                schema = ov.get("schema", [])
-                # reuse the train printer
-                cells = [str(x) for row in schema for x in row]
+        sprint("\n=== Intersected universal schemas (train+test) ===")
+        for ushape in [(1,3),(3,1),(3,3)]:
+            uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            if not uni:
+                sprint(f"shape {ushape}: none")
+                continue
+            sprint(f"shape {ushape}: {len(uni)} positions")
+            for pos, sc in sorted(uni.items()):
+                sprint(f"pos {pos}")
+                cells = [str(x) for row in sc for x in row]
                 w = max((len(c) for c in cells), default=1)
-                for row in schema:
+                for row in sc:
                     sprint(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
                 sprint()
     except Exception as e:
-        sprint(f"[warn] failed to print test schemas: {e}")
-    # (Removed colorless window_nxm_all exploration and schema-match demos)
-    # Print combined schema across full windows (aligned)
-    try:
-        sprint("\n=== Combined schema (window_nxm) ===")
-        comb = dsl.combined_window_nxm_schema(task, COLOR_Wn, window_shape=dsl.WINDOW_SHAPE_DEFAULT)
-        # align
-        cells = [str(x) for row in comb for x in row]
-        w = max((len(c) for c in cells), default=1)
-        for row in comb:
-            sprint(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
-        # add a blank line after combined schema
-        sprint()
-    except Exception as e:
-        sprint(f"[warn] failed to print combined schema: {e}")
+        sprint(f"[warn] failed to print universal schemas: {e}")
 
     # Save captured schema output to file
     out_path = HERE / "schema_print.txt"
@@ -210,55 +108,14 @@ def main():
     except Exception as e:
         print("[warn] failed to write schema_print.txt:", e)
 
-    # Verify overlay counts for 1x3 (same as count of target color centers)
-    def count_color(g, color):
-        return int((np.array(g)==int(color)).sum())
-    for split in ("train","test"):
-        exs = task[split]
-        for i, ex in enumerate(exs, start=1):
-            g = ex["input"]
-            n_c = count_color(g, COLOR_1x3)
-            ovs_13 = dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3))
-            print(f"{split}[{i}] color={COLOR_1x3} count={n_c} overlays_1x3={len(ovs_13)}")
+    # Removed overlay counts
     # Emit a tracked artifact with stable ordering
     out_stats = HERE / "repro_stats.json"
     with open(out_stats, "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2, sort_keys=True)
     print(f"Wrote {out_stats}")
 
-    # Emit simplified per-example stats (pattern centers only)
-    def per_example_details(task):
-        details = {"train": [], "test": []}
-        def centers_of(ovs):
-            return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
-        for ex in task["train"]:
-            g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3)))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_3x1, window_shape=(3,1)))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn, window_shape=dsl.WINDOW_SHAPE_DEFAULT))
-            details["train"].append({
-                "target_color": ex["output"][0][0],
-                "centers_h3": centers_h3,
-                "centers_v3": centers_v3,
-                "centers_crossn": centers_crossn,
-            })
-        for ex in task["test"]:
-            g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3)))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_3x1, window_shape=(3,1)))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn, window_shape=dsl.WINDOW_SHAPE_DEFAULT))
-            details["test"].append({
-                "centers_h3": centers_h3,
-                "centers_v3": centers_v3,
-                "centers_crossn": centers_crossn,
-            })
-        return details
-
-    py_details = per_example_details(task)
-    with open(HERE / "pattern_stats.json", "w", encoding="utf-8") as f:
-        json.dump(py_details, f, separators=(",", ":"), sort_keys=False)
-        f.write("\n")
-    print("Wrote", HERE / "pattern_stats.json")
+    # Removed per-example overlay stats and images
 
     # Render pictures (train + test) without matplotlib for better determinism
     os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
@@ -590,56 +447,194 @@ def main():
         save_png(out_path, mosaic)
         return out_path
 
-    # Optionally render individual pictures (off by default; mosaic is always rendered)
-    GENERATE_INDIVIDUAL = False
-    # Train pics
-    images_dir = HERE / "images"
-    images_dir.mkdir(exist_ok=True)
-    if GENERATE_INDIVIDUAL:
-        for i, ex in enumerate(task["train"], start=1):
-            g = np.array(ex["input"], dtype=int)
-            pred = dsl.predict_window_nxm_uniform_color(g.tolist(), COLOR_Wn)
-            render_grid_with_overlays(
-                g,
-                pred,
-                f"Train {i}: 1x3 (GT={int(ex['output'][0][0])})",
-                str(images_dir / f"overlay_train_{i}.png"),
-                kind="window_nxm", color=COLOR_1x3, window_shape=(1,3),
-            )
-            render_grid_with_overlays(
-                g,
-                pred,
-                f"Train {i}: 3x1 (GT={int(ex['output'][0][0])})",
-                str(images_dir / f"overlay_train_{i}_v.png"),
-                kind="window_nxm", color=COLOR_3x1, window_shape=(3,1),
-            )
-            render_grid_with_overlays(
-                g,
-                pred,
-                f"Train {i}: window_nxm (color={COLOR_Wn}) (GT={int(ex['output'][0][0])})",
-                str(images_dir / f"overlay_train_{i}_x.png"),
-                kind="window_nxm", color=COLOR_Wn,
-            )
-
-        # Test pic
-        gtest = np.array(task["test"][0]["input"], dtype=int)
-        predt = dsl.predict_window_nxm_uniform_color(gtest.tolist(), COLOR_Wn)
-        render_grid_with_overlays(gtest, predt, f"Test: 1x3", str(images_dir / "overlay_test.png"), kind="window_nxm", color=COLOR_1x3, window_shape=(1,3))
-        render_grid_with_overlays(gtest, predt, f"Test: 3x1", str(images_dir / "overlay_test_v.png"), kind="window_nxm", color=COLOR_3x1, window_shape=(3,1))
-        render_grid_with_overlays(gtest, predt, f"Test: window_nxm (color={COLOR_Wn})", str(images_dir / "overlay_test_x.png"), kind="window_nxm", color=COLOR_Wn)
-
-    # Composite mosaic (all train + test in one image for all kinds)
+    # Universal matcher mosaic (replacement for overlay mosaic)
     try:
-        render_mosaic_all_examples(task, COLOR_1x3, COLOR_3x1, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
+        images_dir = HERE / "images"
+        images_dir.mkdir(exist_ok=True)
+
+        def build_panel_body_universal(g, shape: tuple[int,int], schemas_list: list[list[list[object]]], pred_color: int) -> np.ndarray:
+            # Draw base grid and rectangles for each match
+            g = np.asarray(g, dtype=int)
+            SCALE = 16
+            base = upsample(grid_to_rgb(g), scale=SCALE)
+            # collect matches using matcher only
+            pipe_match = dsl.Pipeline([dsl.OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})")])
+            mstate = pipe_match.run(dsl.GridState(g))
+            matches = getattr(mstate, 'matches', [])
+            # Filter to evidence windows consistent with the uniform-neighborhood aggregator
+            def _neighborhood_positions(nr: int, nc: int):
+                if nr == 1 and nc == 3:
+                    return [(0,0),(0,2)]
+                if nr == 3 and nc == 1:
+                    return [(0,0),(2,0)]
+                if nr % 2 == 1 and nc % 2 == 1:
+                    ci, cj = nr//2, nc//2
+                    return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
+                if nr % 2 == 0 and nc % 2 == 0:
+                    i0, i1 = nr//2 - 1, nr//2
+                    j0, j1 = nc//2 - 1, nc//2
+                    return [(i0,j0),(i0,j1),(i1,j0),(i1,j1)]
+                if nr % 2 == 1 and nc % 2 == 0:
+                    ci = nr//2; j0, j1 = nc//2 - 1, nc//2
+                    return [(ci,j0),(ci,j1)]
+                if nr % 2 == 0 and nc % 2 == 1:
+                    cj = nc//2; i0, i1 = nr//2 - 1, nr//2
+                    return [(i0,cj),(i1,cj)]
+                return []
+            def _is_uniform_match(m):
+                mg = m.get('match'); sc = m.get('schema')
+                if mg is None:
+                    return False
+                nr = len(mg); nc = len(mg[0]) if nr>0 else 0
+                if nr==0 or nc==0:
+                    return False
+                poss = _neighborhood_positions(nr, nc)
+                vals = []
+                for (i,j) in poss:
+                    v = mg[i][j]
+                    if v is None:
+                        return False
+                    vals.append(int(v))
+                return bool(vals) and len(set(vals))==1 and vals[0]!=0
+            matches = [m for m in matches if _is_uniform_match(m)]
+            for ov in sorted(matches, key=lambda ov: (ov["y1"], ov["x1"])):
+                y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
+            # Compose predicted color panel at right, same as before
+            Hs = base.shape[0]
+            spacer_w = 8
+            spacer = np.full((Hs + 16, spacer_w, 3), 255, dtype=np.uint8)
+            in_w = base.shape[1]
+            out_w = max(in_w, SCALE)
+            if in_w < out_w:
+                pad = np.full((Hs, out_w - in_w, 3), 255, dtype=np.uint8)
+                base_panel = np.concatenate([base, pad], axis=1)
+            else:
+                base_panel = base
+            out_panel = np.full((Hs, out_w, 3), 255, dtype=np.uint8)
+            out_panel[0:SCALE, 0:SCALE, :] = PALETTE.get(int(pred_color), (0,0,0))
+            def add_border(img: np.ndarray, m: int = 8) -> np.ndarray:
+                h, w, _ = img.shape
+                bordered = np.full((h + 2*m, w + 2*m, 3), 255, dtype=np.uint8)
+                bordered[m:m+h, m:m+w, :] = img
+                return bordered
+            base_panel_b = add_border(base, 8)
+            out_panel_b = add_border(out_panel, 8)
+            bw = base_panel_b.shape[1]
+            ow = out_panel_b.shape[1]
+            target_w = max(bw, ow)
+            if bw < target_w:
+                extra = np.full((base_panel_b.shape[0], target_w - bw, 3), 255, dtype=np.uint8)
+                base_panel_b = np.concatenate([base_panel_b, extra], axis=1)
+            if ow < target_w:
+                extra = np.full((out_panel_b.shape[0], target_w - ow, 3), 255, dtype=np.uint8)
+                out_panel_b = np.concatenate([out_panel_b, extra], axis=1)
+            # Match heights
+            bh = base_panel_b.shape[0]
+            oh = out_panel_b.shape[0]
+            target_h = max(bh, oh)
+            if bh < target_h:
+                extra = np.full((target_h - bh, base_panel_b.shape[1], 3), 255, dtype=np.uint8)
+                base_panel_b = np.concatenate([base_panel_b, extra], axis=0)
+            if oh < target_h:
+                extra = np.full((target_h - oh, out_panel_b.shape[1], 3), 255, dtype=np.uint8)
+                out_panel_b = np.concatenate([out_panel_b, extra], axis=0)
+            spacer = np.full((target_h, spacer_w, 3), 255, dtype=np.uint8)
+            return np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
+
+        def render_mosaic_universal_all_examples(task, out_path: str):
+            # Prepare schemas per shape once
+            shapes = [(1,3),(3,1),tuple(dsl.WINDOW_SHAPE_DEFAULT)]
+            schemas_per_shape: dict[tuple[int,int], list[list[list[object]]]] = {}
+            for ushape in shapes:
+                uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+                schemas_per_shape[tuple(ushape)] = list(uni.values()) if uni else []
+
+            # Choose aggregator: uniform neighborhood
+            def predict_for_grid(g, shape):
+                schemas_list = schemas_per_shape[tuple(shape)]
+                if not schemas_list:
+                    return 0
+                pipe = dsl.Pipeline([
+                    dsl.OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})"),
+                    dsl.OpUniformColorFromMatchesUniformNeighborhood(),
+                ])
+                out = pipe.run(dsl.GridState(np.asarray(g, dtype=int)))
+                return int(getattr(out, 'color', 0))
+
+            # Build rows
+            rows = []
+            row_labels = []
+            kinds = [("1x3", (1,3)), ("3x1", (3,1)), ("WINDOW", tuple(dsl.WINDOW_SHAPE_DEFAULT))]
+            for idx, ex in enumerate(task["train"], start=1):
+                g = np.array(ex["input"], dtype=int)
+                pan = []
+                for _, shape in kinds:
+                    pred = predict_for_grid(g, shape)
+                    schemas_list = schemas_per_shape[tuple(shape)]
+                    pan.append(build_panel_body_universal(g, shape, schemas_list, pred))
+                rows.append(pan); row_labels.append(f"TRAIN {idx}")
+            for idx, ex in enumerate(task["test"], start=1):
+                g = np.array(ex["input"], dtype=int)
+                pan = []
+                for _, shape in kinds:
+                    pred = predict_for_grid(g, shape)
+                    schemas_list = schemas_per_shape[tuple(shape)]
+                    pan.append(build_panel_body_universal(g, shape, schemas_list, pred))
+                rows.append(pan); row_labels.append(f"TEST {idx}")
+
+            # Equalize panel widths per column
+            ncols = len(kinds)
+            nrows = len(rows)
+            col_widths = [0]*ncols
+            row_heights = [0]*nrows
+            for r in range(nrows):
+                for c in range(ncols):
+                    h, w, _ = rows[r][c].shape
+                    col_widths[c] = max(col_widths[c], w)
+                    row_heights[r] = max(row_heights[r], h)
+            # Pad panels to column widths and row heights
+            for r in range(nrows):
+                for c in range(ncols):
+                    img = rows[r][c]
+                    h, w, _ = img.shape
+                    target_h = row_heights[r]; target_w = col_widths[c]
+                    if w < target_w:
+                        extra = np.full((h, target_w - w, 3), 255, dtype=np.uint8)
+                        img = np.concatenate([img, extra], axis=1)
+                    if h < target_h:
+                        extra = np.full((target_h - h, img.shape[1], 3), 255, dtype=np.uint8)
+                        img = np.concatenate([img, extra], axis=0)
+                    rows[r][c] = img
+
+            # Column headers
+            header_h = 5*2 + 6
+            col_header = np.full((header_h, sum(col_widths) + (ncols-1)*8 + 150, 3), 255, dtype=np.uint8)
+            x = 150
+            for (label, _), w in zip(kinds, col_widths):
+                _draw_text(col_header, x + 8, 2, label, color=(0,0,0), scale=2)
+                x += w + 8
+
+            # Build each row image with left label area
+            mosaic_rows = [col_header]
+            for r in range(nrows):
+                left = np.full((row_heights[r], 150, 3), 255, dtype=np.uint8)
+                _draw_text(left, 8, 8, row_labels[r], color=(0,0,0), scale=2)
+                row_imgs = [left]
+                for c in range(ncols):
+                    if c>0:
+                        row_imgs.append(np.full((row_heights[r], 8, 3), 255, dtype=np.uint8))
+                    row_imgs.append(rows[r][c])
+                mosaic_rows.append(np.concatenate(row_imgs, axis=1))
+
+            mosaic = np.concatenate(mosaic_rows, axis=0)
+            save_png(out_path, mosaic)
+            return out_path
+
+        render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"))
         print("Wrote", images_dir / "overlay_mosaic.png")
     except Exception as e:
-        print("[warn] failed to render mosaic:", e)
-    # Composite mosaic (all train + test in one image for all kinds)
-    try:
-        render_mosaic_all_examples(task, COLOR_1x3, COLOR_3x1, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
-        print("Wrote", images_dir / "overlay_mosaic.png")
-    except Exception as e:
-        print("[warn] failed to render mosaic:", e)
+        print("[warn] failed to render universal mosaic:", e)
 
 if __name__ == "__main__":
     main()
