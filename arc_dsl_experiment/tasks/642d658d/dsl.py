@@ -227,6 +227,7 @@ class PatternOverlayExtractor:
 
 # Typed-DSL operations corresponding to the above components
 
+# ===================== A Ops (Overlay Abstraction) =====================
 class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
@@ -238,6 +239,8 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
             raise ValueError("OpBrightOverlayIdentity requires explicit color")
         self.color = int(color)
         self.window_shape = tuple(window_shape) if window_shape is not None else None
+        # Base label; parameters may be appended in pretty-printing
+        self.label = f"overlay_{self.kind}"
 
     def apply(self, state: GridState) -> OverlayContext:
         g = state.grid
@@ -263,6 +266,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
 class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
     input_type = OverlayContext
     output_type = ColorState
+    label = "uniform_pattern_predicate"
 
     def apply(self, state: OverlayContext) -> ColorState:
         # Predicts a single output color from pattern overlays.
@@ -480,7 +484,8 @@ def rule_best_center_cross_mode(x_hat: np.ndarray) -> int:
     return _mode_int(best_colors)
     
 
-# ---------- Center-choosers and center-conditioned outputs (for composition) ----------
+# ===================== G Ops (Core composition: choose -> out) =====================
+# Center-choosers and center-conditioned outputs (for composition)
 def _collect_full_33_windows_for_center(g: np.ndarray, c0: int) -> List[np.ndarray]:
     H, W = g.shape
     wins: List[np.ndarray] = []
@@ -702,6 +707,23 @@ class OpOutFlankModeForCenter(Operation[CenterState, ColorState]):
         if y == 0:
             raise OpFailure("out_flank_mode failed: no color")
         return ColorState(y)
+
+# Explicit op registries (for documentation and composition seeding)
+# G ops: typed, fixed arity
+G_TYPED_OPS: List[Operation] = [
+    OpChooseCenterCrossImplied33(),
+    OpChooseCenterBestFlank(),
+    OpChooseCenterBestCross(),
+    OpOutCrossModeForCenter33(),
+    OpOutFlankModeForCenter(),
+]
+
+# A ops: two-stage pipeline types (GridState->OverlayContext, OverlayContext->ColorState)
+# Overlay extractor is parameterized by kind, color, and optional shape; predicate is fixed.
+A_OP_TYPE_SUMMARY: List[Tuple[str, str, str]] = [
+    ("overlay_window_nxm", "GridState", "OverlayContext"),
+    ("uniform_pattern_predicate", "OverlayContext", "ColorState"),
+]
 # ---- G Core: base rules ----
 COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("uniform_cross_everywhere_mode", sel_color_uniform_cross_everywhere_mode),
@@ -863,14 +885,8 @@ def _enumerate_typed_programs(
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
-    g_ops: List[Operation] = [
-        OpChooseCenterCrossImplied33(),
-        OpChooseCenterBestFlank(),
-        OpChooseCenterBestCross(),
-        OpOutCrossModeForCenter33(),
-        OpOutFlankModeForCenter(),
-    ]
-    winners_g = _enumerate_typed_programs(task, g_ops, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
+    # G typed ops (choose -> out)
+    winners_g = _enumerate_typed_programs(task, G_TYPED_OPS, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_G = []
     for name, _ in winners_g:
         # Present in legacy style for G composed programs
