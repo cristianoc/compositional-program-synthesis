@@ -8,7 +8,7 @@
   "G": {
     "nodes": 70,
     "programs_found": 3,
-    "time_sec": 0.06,
+    "time_sec": 0.08,
     "tries_to_first": 63
   }
 }
