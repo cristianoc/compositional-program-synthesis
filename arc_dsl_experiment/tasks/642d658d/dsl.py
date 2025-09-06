@@ -476,6 +476,7 @@ class OpSchemaMatchAcrossGrid(Operation[OverlayContext, MatchesState]):
                         matches.append({
                             "y1": int(y1+1), "x1": int(x1+1), "y2": int(y2+1), "x2": int(x2+1),
                             "match": mg,
+                            "schema": schema,
                         })
         return MatchesState(g, matches)
 
@@ -501,6 +502,347 @@ class OpUniformColorFromMatches(Operation[MatchesState, ColorState]):
         if not vals:
             return ColorState(0)
         return ColorState(_mode_int(vals))
+
+
+class OpFilterCrosslikeSchemas(Operation[OverlayContext, OverlayContext]):
+    input_type = OverlayContext
+    output_type = OverlayContext
+
+    label = "filter_crosslike_schemas"
+
+    def _is_crosslike(self, schema: List[List[Union[int, str]]]) -> bool:
+        nr = len(schema)
+        nc = len(schema[0]) if nr>0 else 0
+        if nr == 0 or nc == 0:
+            return False
+        # Helper to get comparable token at (i,j)
+        def tok(i,j):
+            v = schema[i][j]
+            return v
+        # 1x3: ends equal and not '*'
+        if nr == 1 and nc == 3:
+            a, b = tok(0,0), tok(0,2)
+            return (a == b) and (a != "*")
+        # 3x1: ends equal and not '*'
+        if nr == 3 and nc == 1:
+            a, b = tok(0,0), tok(2,0)
+            return (a == b) and (a != "*")
+        # odd×odd: 4-way cross equal and not '*'
+        if nr % 2 == 1 and nc % 2 == 1:
+            ci, cj = nr//2, nc//2
+            positions = [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
+            tks = [tok(i,j) for (i,j) in positions]
+            return len(set(tks)) == 1 and tks[0] != "*"
+        # odd×even: central 1×2 equal and not '*'
+        if nr % 2 == 1 and nc % 2 == 0:
+            ci = nr//2; j0 = nc//2 - 1; j1 = nc//2
+            a, b = tok(ci, j0), tok(ci, j1)
+            return (a == b) and (a != "*")
+        # even×odd: central 2×1 equal and not '*'
+        if nr % 2 == 0 and nc % 2 == 1:
+            cj = nc//2; i0 = nr//2 - 1; i1 = nr//2
+            a, b = tok(i0, cj), tok(i1, cj)
+            return (a == b) and (a != "*")
+        # even×even: central 2×2 all equal and not '*'
+        if nr % 2 == 0 and nc % 2 == 0:
+            i0 = nr//2 - 1; i1 = nr//2
+            j0 = nc//2 - 1; j1 = nc//2
+            tks = [tok(i0,j0), tok(i0,j1), tok(i1,j0), tok(i1,j1)]
+            return len(set(tks)) == 1 and tks[0] != "*"
+        return False
+
+    def apply(self, state: OverlayContext) -> OverlayContext:
+        ovs = []
+        for ov in state.overlays:
+            schema = ov.get("schema")
+            if not schema:
+                continue
+            if self._is_crosslike(schema):
+                ovs.append(ov)
+        # Keep stats consistent
+        g = state.grid
+        H,W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
+        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+
+
+class OpFilterSchemasWithConstant(Operation[OverlayContext, OverlayContext]):
+    input_type = OverlayContext
+    output_type = OverlayContext
+
+    label = "filter_schemas_with_constant"
+
+    def __init__(self, exclude_zero: bool = True):
+        self.exclude_zero = bool(exclude_zero)
+
+    def apply(self, state: OverlayContext) -> OverlayContext:
+        ovs = []
+        for ov in state.overlays:
+            schema = ov.get("schema")
+            if not schema:
+                continue
+            has_const = False
+            for row in schema:
+                for s in row:
+                    if isinstance(s, int):
+                        if self.exclude_zero and int(s) == 0:
+                            continue
+                        has_const = True
+                        break
+                if has_const:
+                    break
+            if has_const:
+                ovs.append(ov)
+        g = state.grid
+        H,W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
+        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+
+
+class OpFilterSchemasWithConstantValue(Operation[OverlayContext, OverlayContext]):
+    input_type = OverlayContext
+    output_type = OverlayContext
+
+    def __init__(self, const_value: int, exclude_zero: bool = True):
+        self.const_value = int(const_value)
+        self.exclude_zero = bool(exclude_zero)
+        self.label = f"filter_schema_const({self.const_value})"
+
+    def apply(self, state: OverlayContext) -> OverlayContext:
+        target = int(self.const_value)
+        if self.exclude_zero and target == 0:
+            return OverlayContext(state.grid, [], dict(count=0, max_contrast=0.0, total_area=0, total_area_frac=0.0), state.kind, getattr(state, 'color', None))
+        ovs = []
+        for ov in state.overlays:
+            schema = ov.get("schema")
+            if not schema:
+                continue
+            has_target = False
+            for row in schema:
+                for s in row:
+                    if isinstance(s, int) and int(s) == target:
+                        has_target = True
+                        break
+                if has_target:
+                    break
+            if has_target:
+                ovs.append(ov)
+        g = state.grid
+        H,W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
+        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+
+
+class OpFilterSchemasCenterConstant(Operation[OverlayContext, OverlayContext]):
+    input_type = OverlayContext
+    output_type = OverlayContext
+
+    def __init__(self, const_value: int):
+        self.const_value = int(const_value)
+        self.label = f"filter_center_const({self.const_value})"
+
+    def _center_positions(self, nr: int, nc: int):
+        # Return list of center coordinates depending on parity
+        if nr % 2 == 1 and nc % 2 == 1:
+            return [(nr//2, nc//2)]
+        if nr % 2 == 1 and nc % 2 == 0:
+            return [(nr//2, nc//2 - 1), (nr//2, nc//2)]
+        if nr % 2 == 0 and nc % 2 == 1:
+            return [(nr//2 - 1, nc//2), (nr//2, nc//2)]
+        # even×even → 2×2 center
+        return [(nr//2 - 1, nc//2 - 1), (nr//2 - 1, nc//2), (nr//2, nc//2 - 1), (nr//2, nc//2)]
+
+    def apply(self, state: OverlayContext) -> OverlayContext:
+        v = int(self.const_value)
+        ovs: List[dict] = []
+        for ov in state.overlays:
+            sc = ov.get("schema")
+            if not sc:
+                continue
+            nr = len(sc); nc = len(sc[0]) if nr>0 else 0
+            ok = True
+            for (i,j) in self._center_positions(nr, nc):
+                s = sc[i][j]
+                if not (isinstance(s, int) and int(s) == v):
+                    ok = False
+                    break
+            if ok:
+                ovs.append(ov)
+        g = state.grid
+        H,W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
+        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+
+
+class OpUniformColorPerSchemaThenMode(Operation[MatchesState, ColorState]):
+    input_type = MatchesState
+    output_type = ColorState
+
+    label = "uniform_color_per_schema_then_mode"
+
+    def __init__(self, cross_only: bool = True):
+        self.cross_only = bool(cross_only)
+
+    def _cross_positions(self, nr: int, nc: int):
+        if nr == 1 and nc == 3:
+            return [(0,0),(0,2)]
+        if nr == 3 and nc == 1:
+            return [(0,0),(2,0)]
+        ci, cj = nr//2, nc//2
+        if nr%2==1 and nc%2==1:
+            return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
+        if nr%2==1 and nc%2==0:
+            return [(ci, cj-1),(ci, cj)]
+        if nr%2==0 and nc%2==1:
+            return [(ci-1, cj),(ci, cj)]
+        return [(ci-1, cj-1),(ci-1, cj),(ci, cj-1),(ci, cj)]
+
+    def apply(self, state: MatchesState) -> ColorState:
+        from collections import defaultdict, Counter
+        by_schema: Dict[str, List[List[List[Optional[int]]]]] = defaultdict(list)
+        for m in state.matches:
+            sc = m.get("schema")
+            mg = m.get("match")
+            if sc is None or mg is None:
+                continue
+            key = str((tuple(len(row) for row in sc), tuple(tuple(row) for row in sc)))
+            by_schema[key].append(mg)
+        schema_modes: List[int] = []
+        for mg_list in by_schema.values():
+            vals: List[int] = []
+            for mg in mg_list:
+                nr = len(mg); nc = len(mg[0]) if nr>0 else 0
+                if nr==0 or nc==0: continue
+                if self.cross_only:
+                    for (i,j) in self._cross_positions(nr, nc):
+                        v = mg[i][j]
+                        if v is None or v==0: continue
+                        vals.append(int(v))
+                else:
+                    for row in mg:
+                        for v in row:
+                            if v is None or v==0: continue
+                            vals.append(int(v))
+            if vals:
+                c = Counter(vals)
+                top = max(c.values())
+                mode_vals = [k for k,v in c.items() if v==top]
+                schema_modes.append(int(min(mode_vals)))
+        if not schema_modes:
+            return ColorState(0)
+        # final mode across schema modes
+        from collections import Counter
+        c2 = Counter(schema_modes)
+        top = max(c2.values())
+        mode_vals = [k for k,v in c2.items() if v==top]
+        return ColorState(int(min(mode_vals)))
+
+
+class OpUniformColorFromSchemaConstantsOnly(Operation[MatchesState, ColorState]):
+    input_type = MatchesState
+    output_type = ColorState
+
+    label = "uniform_from_schema_constants"
+
+    def apply(self, state: MatchesState) -> ColorState:
+        vals: List[int] = []
+        for m in state.matches:
+            schema = m.get("schema")
+            mg = m.get("match")
+            if schema is None or mg is None:
+                continue
+            nr = len(schema)
+            nc = len(schema[0]) if nr>0 else 0
+            for i in range(nr):
+                for j in range(nc):
+                    s = schema[i][j]
+                    if isinstance(s, int):
+                        v = mg[i][j]
+                        if v is None:
+                            continue
+                        vv = int(v)
+                        if vv != 0:
+                            vals.append(vv)
+        if not vals:
+            return ColorState(0)
+        return ColorState(_mode_int(vals))
+
+
+class OpUniformColorFromMatchesExcludeGlobal(Operation[MatchesState, ColorState]):
+    input_type = MatchesState
+    output_type = ColorState
+
+    label = "uniform_from_matches_excl_global"
+
+    def __init__(self, cross_only: bool = False):
+        self.cross_only = bool(cross_only)
+
+    def _cross_positions(self, nr: int, nc: int):
+        if nr == 1 and nc == 3:
+            return [(0,0),(0,2)]
+        if nr == 3 and nc == 1:
+            return [(0,0),(2,0)]
+        ci, cj = nr//2, nc//2
+        if nr%2==1 and nc%2==1:
+            return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
+        if nr%2==1 and nc%2==0:
+            return [(ci, cj-1),(ci, cj)]
+        if nr%2==0 and nc%2==1:
+            return [(ci-1, cj),(ci, cj)]
+        return [(ci-1, cj-1),(ci-1, cj),(ci, cj-1),(ci, cj)]
+
+    def apply(self, state: MatchesState) -> ColorState:
+        g = state.grid
+        # Global nonzero mode of grid
+        nz = g[g!=0]
+        g_mode = None
+        if nz.size > 0:
+            vals, cnt = np.unique(nz, return_counts=True)
+            g_mode = int(vals[int(np.argmax(cnt))])
+        vals_out: List[int] = []
+        for m in state.matches:
+            mg = m.get("match")
+            schema = m.get("schema")
+            if mg is None:
+                continue
+            if self.cross_only and schema is not None:
+                nr = len(schema); nc = len(schema[0]) if nr>0 else 0
+                for (i,j) in self._cross_positions(nr, nc):
+                    v = mg[i][j]
+                    if v is None:
+                        continue
+                    vv = int(v)
+                    if vv == 0 or (g_mode is not None and vv == g_mode):
+                        continue
+                    vals_out.append(vv)
+            else:
+                for row in mg:
+                    for v in row:
+                        if v is None:
+                            continue
+                        vv = int(v)
+                        if vv == 0 or (g_mode is not None and vv == g_mode):
+                            continue
+                        vals_out.append(vv)
+        if not vals_out:
+            return ColorState(0)
+        return ColorState(_mode_int(vals_out))
 
 # Composed program body used in abstraction space: PatternOverlayExtractor |> UniformPatternPredicate |> OutputAgreedColor.
 def predict_window_nxm_uniform_color(grid: List[List[int]], color: int) -> int:
@@ -548,6 +890,430 @@ class OpBrightOverlayAllWindows(Operation[GridState, OverlayContext]):
         self.absx.overlays = ovs
         self.absx.last_stats = stats
         return OverlayContext(g, ovs, stats, self.kind, None)
+
+
+class OpFilterWindowsCenterValue(Operation[OverlayContext, OverlayContext]):
+    input_type = OverlayContext
+    output_type = OverlayContext
+
+    def __init__(self, const_value: int):
+        self.const_value = int(const_value)
+        self.label = f"filter_windows_center({self.const_value})"
+
+    def apply(self, state: OverlayContext) -> OverlayContext:
+        target = int(self.const_value)
+        ovs: List[dict] = []
+        for ov in state.overlays:
+            win = ov.get("window")
+            if win is None:
+                continue
+            nr = len(win); nc = len(win[0]) if nr>0 else 0
+            if nr==0 or nc==0:
+                continue
+            ci, cj = nr//2, nc//2
+            try:
+                if int(win[ci][cj]) == target:
+                    ovs.append(ov)
+            except Exception:
+                continue
+        g = state.grid
+        H,W = g.shape
+        count = len(ovs)
+        max_contrast = max([ov.get("contrast", 0.0) for ov in ovs], default=0.0)
+        total_area = sum([ov.get("area", 0) for ov in ovs]) if ovs else 0
+        total_area_frac = float(total_area) / float(H*W) if H*W>0 else 0.0
+        stats = dict(count=count, max_contrast=max_contrast, total_area=total_area, total_area_frac=total_area_frac)
+        return OverlayContext(state.grid, ovs, stats, state.kind, getattr(state, 'color', None))
+
+
+def _build_combined_schema_from_windows(wins: List[np.ndarray]) -> List[List[Union[int, str]]]:
+    if not wins:
+        return [["*"]]
+    hh, ww = wins[0].shape
+    # Constants per position across windows
+    pos_vals: List[set[int]] = []
+    for i in range(hh):
+        for j in range(ww):
+            vals = {int(win[i, j]) for win in wins}
+            pos_vals.append(vals)
+    is_const = [len(s) == 1 for s in pos_vals]
+    const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
+    # Equality relation among non-constant positions
+    npos = hh * ww
+    adj = [[False] * npos for _ in range(npos)]
+    for a in range(npos):
+        adj[a][a] = True
+    for a in range(npos):
+        if is_const[a]:
+            continue
+        ai, aj = divmod(a, ww)
+        for b in range(a + 1, npos):
+            if is_const[b]:
+                continue
+            bi, bj = divmod(b, ww)
+            equal_all = True
+            for win in wins:
+                if int(win[ai, aj]) != int(win[bi, bj]):
+                    equal_all = False
+                    break
+            if equal_all:
+                adj[a][b] = adj[b][a] = True
+    # Connected components → variable groups
+    visited = [False] * npos
+    comps: List[List[int]] = []
+    for v in range(npos):
+        if visited[v] or is_const[v]:
+            continue
+        stack = [v]
+        visited[v] = True
+        comp = [v]
+        while stack:
+            u = stack.pop()
+            for w in range(npos):
+                if not visited[w] and adj[u][w]:
+                    visited[w] = True
+                    stack.append(w)
+                    comp.append(w)
+        if len(comp) >= 2:
+            comps.append(sorted(comp))
+    # Assemble schema grid
+    schema: List[List[Union[int, str]]] = [["*" for _ in range(ww)] for _ in range(hh)]
+    for p in range(npos):
+        if is_const[p]:
+            i, j = divmod(p, ww)
+            schema[i][j] = int(const_val[p]) if const_val[p] is not None else "*"
+    var_tokens = ("X", "Y", "Z", "U", "V", "W")
+    next_var = 0
+    for comp in comps:
+        tok = var_tokens[min(next_var, len(var_tokens) - 1)]
+        next_var += 1
+        for p in comp:
+            i, j = divmod(p, ww)
+            schema[i][j] = tok
+    return schema
+
+
+class OpMatchCombinedSchemaAcrossGrid(Operation[OverlayContext, MatchesState]):
+    input_type = OverlayContext
+    output_type = MatchesState
+
+    def __init__(self, cross_only: bool = False):
+        self.cross_only = bool(cross_only)
+        self.label = "match_combined_schema"
+
+    def apply(self, state: OverlayContext) -> MatchesState:
+        # Build combined schema from current overlays’ windows, then match it across the grid
+        wins: List[np.ndarray] = []
+        for ov in state.overlays:
+            win = ov.get("window")
+            if win is None:
+                continue
+            wins.append(np.array(win, dtype=int))
+        if not wins:
+            return MatchesState(state.grid, [])
+        schema = _build_combined_schema_from_windows(wins)
+        g = state.grid
+        H, W = g.shape
+        nr, nc = len(schema), len(schema[0]) if len(schema)>0 else 0
+        up = (nr - 1) // 2
+        down = nr // 2
+        left = (nc - 1) // 2
+        right = nc // 2
+        rmin, rmax = up, H - 1 - down
+        cmin, cmax = left, W - 1 - right
+        matches: List[dict] = []
+        for r in range(rmin, rmax + 1):
+            for c in range(cmin, cmax + 1):
+                y1 = r - up; x1 = c - left
+                y2 = r + down; x2 = c + right
+                win = g[y1:y2+1, x1:x2+1]
+                mg = _schema_match_window(schema, win)
+                if mg is not None:
+                    matches.append({
+                        "y1": int(y1+1), "x1": int(x1+1), "y2": int(y2+1), "x2": int(x2+1),
+                        "match": mg, "schema": schema,
+                    })
+        return MatchesState(g, matches)
+
+
+class OpMatchFixedSchema(Operation[GridState, MatchesState]):
+    input_type = GridState
+    output_type = MatchesState
+
+    def __init__(self, schema: List[List[Union[int, str]]], label: Optional[str] = None):
+        self.schema = schema
+        self.label = label or "match_fixed_schema"
+
+    def apply(self, state: GridState) -> MatchesState:
+        g = np.asarray(state.grid, dtype=int)
+        H, W = g.shape
+        schema = self.schema
+        nr, nc = len(schema), (len(schema[0]) if len(schema)>0 else 0)
+        up, down = (nr-1)//2, nr//2
+        left, right = (nc-1)//2, nc//2
+        matches: List[dict] = []
+        if nr == 0 or nc == 0:
+            return MatchesState(g, matches)
+        rmin, rmax = up, H - 1 - down
+        cmin, cmax = left, W - 1 - right
+        for r in range(rmin, rmax + 1):
+            for c in range(cmin, cmax + 1):
+                y1, x1 = r - up, c - left
+                y2, x2 = r + down, c + right
+                win = g[y1:y2+1, x1:x2+1]
+                mg = _schema_match_window(schema, win)
+                if mg is not None:
+                    matches.append({
+                        "y1": int(y1+1), "x1": int(x1+1), "y2": int(y2+1), "x2": int(x2+1),
+                        "match": mg, "schema": schema,
+                    })
+        return MatchesState(g, matches)
+
+
+def build_intersected_universal_schemas_for_task(task: Dict, *, window_shape: tuple[int,int]=(3,3), center_value: int = 4, splits: tuple[str,...] = ("train","test")) -> Dict[tuple[int,int], List[List[Union[int,str]]]]:
+    """For each position (ri,rj) in the window, build the universal schema intersection across all inputs
+    for the cohort of windows whose (ri,rj) equals center_value. Only positions present in every input
+    are returned."""
+    ri_max, rj_max = int(window_shape[0]), int(window_shape[1])
+    per_pos_schemas: Dict[tuple[int,int], List[List[List[Union[int,str]]]]] = {}
+    present_all: Dict[tuple[int,int], bool] = {}
+    for ri in range(ri_max):
+        for rj in range(rj_max):
+            per_pos_schemas[(ri,rj)] = []
+            present_all[(ri,rj)] = True
+    for split in splits:
+        for ex in task.get(split, []):
+            g = np.array(ex["input"], dtype=int)
+            ov = OpBrightOverlayAllWindows(window_shape=window_shape).apply(GridState(g))
+            wins_by_pos: Dict[tuple[int,int], List[np.ndarray]] = { (ri,rj): [] for ri in range(ri_max) for rj in range(rj_max) }
+            for o in ov.overlays:
+                w = np.array(o.get("window"), dtype=int)
+                for ri in range(ri_max):
+                    for rj in range(rj_max):
+                        try:
+                            if int(w[ri, rj]) == int(center_value):
+                                wins_by_pos[(ri,rj)].append(w)
+                        except Exception:
+                            pass
+            for pos, wins in wins_by_pos.items():
+                if not wins:
+                    present_all[pos] = False
+                else:
+                    per_pos_schemas[pos].append(_build_combined_schema_from_windows(wins))
+    out: Dict[tuple[int,int], List[List[Union[int,str]]]] = {}
+    for pos, ok in present_all.items():
+        if not ok:
+            continue
+        schemas_here = per_pos_schemas[pos]
+        if schemas_here:
+            out[pos] = intersect_universal_schemas(schemas_here)
+    return out
+
+
+def intersect_universal_schemas(schemas: List[List[List[Union[int, str]]]]) -> List[List[Union[int, str]]]:
+    """Intersect per-grid universal schemas into a cross-grid universal schema.
+
+    Semantics: a constraint (constant at a position, or equality between positions)
+    is kept only if it holds in every input schema. Constants must agree across all
+    inputs to remain constants; otherwise, if equality between two positions holds
+    in every input (either both positions are the same constant in that input or
+    belong to the same variable group there), we mark them as a variable group here.
+    All other positions become '*'.
+    """
+    if not schemas:
+        return [["*"]]
+    hh = len(schemas[0])
+    ww = len(schemas[0][0]) if hh > 0 else 0
+    # Sanity: all shapes equal
+    for sc in schemas:
+        if len(sc) != hh or (hh > 0 and len(sc[0]) != ww):
+            raise ValueError("All schemas must share the same shape for intersection")
+
+    npos = hh * ww
+    # Determine positions that are constants with the same value across all schemas
+    is_const_global = [True] * npos
+    const_value_global: List[Optional[int]] = [None] * npos
+    for p in range(npos):
+        i, j = divmod(p, ww)
+        vals: List[Optional[int]] = []
+        ok = True
+        for sc in schemas:
+            s = sc[i][j]
+            if isinstance(s, int):
+                vals.append(int(s))
+            else:
+                ok = False
+                break
+        if ok and vals and all(v == vals[0] for v in vals):
+            const_value_global[p] = int(vals[0])
+            is_const_global[p] = True
+        else:
+            const_value_global[p] = None
+            is_const_global[p] = False
+
+    # Equality relation among non-constant positions that holds in every schema
+    eq_all = [[False] * npos for _ in range(npos)]
+    for a in range(npos):
+        eq_all[a][a] = True
+    for a in range(npos):
+        if is_const_global[a]:
+            continue
+        ai, aj = divmod(a, ww)
+        for b in range(a + 1, npos):
+            if is_const_global[b]:
+                continue
+            bi, bj = divmod(b, ww)
+            equal_everywhere = True
+            for sc in schemas:
+                sa = sc[ai][aj]
+                sb = sc[bi][bj]
+                # If either is '*', this input does not guarantee equality
+                if isinstance(sa, str) and sa == "*":
+                    equal_everywhere = False
+                    break
+                if isinstance(sb, str) and sb == "*":
+                    equal_everywhere = False
+                    break
+                # Both constants: must be equal numerically in this input
+                if isinstance(sa, int) and isinstance(sb, int):
+                    if int(sa) != int(sb):
+                        equal_everywhere = False
+                        break
+                # Both variables: must be the same token in this input schema
+                elif isinstance(sa, str) and isinstance(sb, str):
+                    if sa != sb:
+                        equal_everywhere = False
+                        break
+                else:
+                    # One const, one var → not universally equal in this input
+                    equal_everywhere = False
+                    break
+            if equal_everywhere:
+                eq_all[a][b] = eq_all[b][a] = True
+
+    # Connected components among non-constant positions with equality everywhere
+    visited = [False] * npos
+    comps: List[List[int]] = []
+    for p in range(npos):
+        if visited[p] or is_const_global[p]:
+            continue
+        stack = [p]
+        visited[p] = True
+        comp = [p]
+        while stack:
+            u = stack.pop()
+            for v in range(npos):
+                if not visited[v] and eq_all[u][v]:
+                    visited[v] = True
+                    stack.append(v)
+                    comp.append(v)
+        if len(comp) >= 2:
+            comps.append(sorted(comp))
+
+    # Assemble intersected schema
+    out: List[List[Union[int, str]]] = [["*" for _ in range(ww)] for _ in range(hh)]
+    for p in range(npos):
+        if is_const_global[p] and const_value_global[p] is not None:
+            i, j = divmod(p, ww)
+            out[i][j] = int(const_value_global[p])
+    var_tokens = ("X", "Y", "Z", "U", "V", "W")
+    next_var = 0
+    for comp in comps:
+        tok = var_tokens[min(next_var, len(var_tokens) - 1)]
+        next_var += 1
+        for p in comp:
+            i, j = divmod(p, ww)
+            out[i][j] = tok
+    # Runtime self-check: every equality encoded in 'out' must be supported by all inputs
+    def _eq_in_schema(sc, a, b):
+        ai, aj = divmod(a, ww); bi, bj = divmod(b, ww)
+        sa, sb = sc[ai][aj], sc[bi][bj]
+        if isinstance(sa, str) and sa == "*": return False
+        if isinstance(sb, str) and sb == "*": return False
+        if isinstance(sa, int) and isinstance(sb, int): return int(sa) == int(sb)
+        if isinstance(sa, str) and isinstance(sb, str): return sa == sb
+        return False
+    violations: List[str] = []
+    # Check constants
+    for p in range(npos):
+        if isinstance(out[p//ww][p%ww], int):
+            v = int(out[p//ww][p%ww])
+            for sc in schemas:
+                s = sc[p//ww][p%ww]
+                if not (isinstance(s, int) and int(s) == v):
+                    violations.append(f"const mismatch at pos {p} expected {v} got {s}")
+                    break
+    # Check variable equalities
+    pos_by_tok: Dict[str, List[int]] = {}
+    for p in range(npos):
+        s = out[p//ww][p%ww]
+        if isinstance(s, str) and s != "*":
+            pos_by_tok.setdefault(s, []).append(p)
+    for tok, poss in pos_by_tok.items():
+        for i in range(len(poss)):
+            for j in range(i+1, len(poss)):
+                a, b = poss[i], poss[j]
+                for sc in schemas:
+                    if not _eq_in_schema(sc, a, b):
+                        violations.append(f"equality mismatch for token {tok} between {a} and {b}")
+                        break
+    if violations:
+        print("[warn] intersect_universal_schemas: semantic check failed:")
+        for msg in violations[:8]:
+            print(" -", msg)
+    return out
+
+
+def validate_universal_schema_on_windows(schema: List[List[Union[int,str]]], wins: List[np.ndarray]) -> Dict[str, Union[int, List[dict]]]:
+    """Validate that 'schema' matches every window in 'wins'. Returns a report."""
+    violations: List[dict] = []
+    ok = 0
+    for idx, win in enumerate(wins):
+        mg = _schema_match_window(schema, win)
+        if mg is None:
+            violations.append({"index": idx, "window": win.tolist()})
+        else:
+            ok += 1
+    return {"total": len(wins), "ok": ok, "violations": violations}
+
+
+def debug_check_universal_intersection(task: Dict, *, window_shape: tuple[int,int]=(3,3), center_value: int = 4, splits: tuple[str,...] = ("train","test")) -> None:
+    """Build per-grid universal schemas for windows with center == center_value over given splits
+    (e.g., ("train", "test")), intersect them, and validate that the intersection holds on every
+    center==value window of every grid across those splits."""
+    # Collect per-grid cohorts and schemas
+    per_grid_wins: List[List[np.ndarray]] = []
+    per_grid_schemas: List[List[List[Union[int,str]]]] = []
+    for split in splits:
+        for ex in task.get(split, []):
+            g = np.array(ex["input"], dtype=int)
+            ov = OpBrightOverlayAllWindows(window_shape=window_shape).apply(GridState(g))
+            wins: List[np.ndarray] = []
+            for o in ov.overlays:
+                w = np.array(o.get("window"), dtype=int)
+                nr, nc = w.shape
+                if nr>0 and nc>0 and int(w[nr//2, nc//2]) == int(center_value):
+                    wins.append(w)
+            per_grid_wins.append(wins)
+            per_grid_schemas.append(_build_combined_schema_from_windows(wins))
+    inter = intersect_universal_schemas(per_grid_schemas)
+    # Validate intersection schema against every cohort window
+    any_fail = False
+    for gi, wins in enumerate(per_grid_wins, start=1):
+        rep = validate_universal_schema_on_windows(inter, wins)
+        if rep["ok"] != rep["total"]:
+            any_fail = True
+            print(f"[warn] universal semantics failed on grid {gi}: {rep['ok']}/{rep['total']} windows passed")
+            for v in rep["violations"][:3]:
+                print("  - window (sample):")
+                for row in v["window"]:
+                    print("    ", row)
+    if not any_fail:
+        print("Universal semantics validated: intersection schema holds for all cohort windows across inputs.")
+    # Print the intersection schema for visibility
+    print("Intersection schema:")
+    for row in inter:
+        print(" ", "[" + ", ".join(str(x) for x in row) + "]")
 
 def predict_with_pattern_kind_shape(grid: List[List[int]], kind: str, color: int, *, window_shape: Optional[tuple[int,int]]) -> int:
     gstate = GridState(np.asarray(grid, dtype=int))
@@ -1090,8 +1856,13 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     total_ABS = len(PATTERN_KINDS) * len(colors) * len(shapes) + len(shapes)
     abs_ops: List[Operation] = [
         OpUniformPatternPredicate(),
+        OpFilterCrosslikeSchemas(),
+        OpFilterSchemasWithConstant(),
         OpSchemaMatchAcrossGrid(),
         OpUniformColorFromMatches(),
+        OpUniformColorPerSchemaThenMode(),
+        OpUniformColorFromSchemaConstantsOnly(),
+        OpUniformColorFromMatchesExcludeGlobal(),
     ]
     # Pre-instantiate overlay ops per (shape, color) for kind=window_nxm
     for shape in shapes:
@@ -1117,8 +1888,24 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
                 break
         if ok_all:
             abs_ops.append(OpBrightOverlayAllWindows(window_shape=shape))
+    # Add filter-by-constant ops (c ∈ 1..9)
+    for c in range(1, 10):
+        abs_ops.append(OpFilterSchemasWithConstantValue(c))
+    # Add center-constant filters (c ∈ 1..9)
+    for c in range(1, 10):
+        abs_ops.append(OpFilterSchemasCenterConstant(c))
+    # Add a schema matcher variant with no limit to pick up all unique schemas
+    abs_ops.append(OpSchemaMatchAcrossGrid(limit_schemas=None))
+    # Add universal fixed-schema matchers derived from task (train+test) for 3x3 and center_value=4
+    try:
+        uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=(3,3), center_value=4, splits=("train","test"))
+        for (ri,rj), schema in uni_schemas.items():
+            label = f"match_universal_pos({ri},{rj})"
+            abs_ops.append(OpMatchFixedSchema(schema, label=label))
+    except Exception:
+        pass
     # Enumerate up to depth 3 to allow schema-matching chains
-    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=3, min_depth=2, start_type=GridState, end_type=ColorState)
+    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_ABS = []
     for name, seq in winners_abs:
         # Pretty-print sequences in a readable, parameterized style
@@ -1135,6 +1922,35 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             programs_ABS.append(
                 f"PatternOverlayExtractor(kind=window_nxm_all, window_shape={shape}) |> SchemaMatchAcrossGrid |> UniformColorFromMatches"
             )
+        elif len(seq) == 4 and isinstance(seq[0], OpBrightOverlayAllWindows) and isinstance(seq[1], OpFilterSchemasWithConstant) and isinstance(seq[2], OpSchemaMatchAcrossGrid) and isinstance(seq[3], OpUniformColorPerSchemaThenMode):
+            ov: OpBrightOverlayAllWindows = seq[0]  # type: ignore[assignment]
+            shape = ov.window_shape if ov.window_shape is not None else WINDOW_SHAPE_DEFAULT
+            programs_ABS.append(
+                f"PatternOverlayExtractor(kind=window_nxm_all, window_shape={shape}) |> FilterSchemasWithConstant |> SchemaMatchAcrossGrid |> UniformColorPerSchemaThenMode"
+            )
+        elif len(seq) == 4 and isinstance(seq[0], OpBrightOverlayAllWindows) and isinstance(seq[1], OpFilterCrosslikeSchemas) and isinstance(seq[2], OpSchemaMatchAcrossGrid) and isinstance(seq[3], OpUniformColorPerSchemaThenMode):
+            ov: OpBrightOverlayAllWindows = seq[0]  # type: ignore[assignment]
+            shape = ov.window_shape if ov.window_shape is not None else WINDOW_SHAPE_DEFAULT
+            programs_ABS.append(
+                f"PatternOverlayExtractor(kind=window_nxm_all, window_shape={shape}) |> FilterCrosslikeSchemas |> SchemaMatchAcrossGrid |> UniformColorPerSchemaThenMode"
+            )
+        elif len(seq) == 4 and isinstance(seq[0], OpBrightOverlayAllWindows) and isinstance(seq[1], OpFilterSchemasWithConstantValue) and isinstance(seq[2], OpSchemaMatchAcrossGrid) and isinstance(seq[3], (OpUniformColorFromSchemaConstantsOnly, OpUniformColorPerSchemaThenMode, OpUniformColorFromMatchesExcludeGlobal)):
+            ov: OpBrightOverlayAllWindows = seq[0]  # type: ignore[assignment]
+            fop: OpFilterSchemasWithConstantValue = seq[1]  # type: ignore[assignment]
+            shape = ov.window_shape if ov.window_shape is not None else WINDOW_SHAPE_DEFAULT
+            if isinstance(seq[3], OpUniformColorFromSchemaConstantsOnly):
+                agg = "UniformFromSchemaConstants"
+            elif isinstance(seq[3], OpUniformColorPerSchemaThenMode):
+                agg = "UniformColorPerSchemaThenMode"
+            else:
+                agg = "UniformFromMatchesExclGlobal"
+            programs_ABS.append(
+                f"PatternOverlayExtractor(kind=window_nxm_all, window_shape={shape}) |> FilterSchemasWithConstantValue({fop.const_value}) |> SchemaMatchAcrossGrid |> {agg}"
+            )
+        elif len(seq) == 2 and isinstance(seq[0], OpMatchFixedSchema) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches)):
+            m0 = seq[0]
+            aggname = seq[1].__class__.__name__
+            programs_ABS.append(f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}")
         else:
             # Fallback: use labels
             programs_ABS.append(name)
@@ -1177,7 +1993,7 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
     # Build ABS ops as in enumerate_programs_for_task
     abs_ops: List[Operation] = [
-        OpUniformPatternPredicate(), OpSchemaMatchAcrossGrid(), OpUniformColorFromMatches()
+        OpUniformPatternPredicate(), OpFilterCrosslikeSchemas(), OpFilterSchemasWithConstant(), OpSchemaMatchAcrossGrid(), OpUniformColorFromMatches(), OpUniformColorPerSchemaThenMode()
     ]
     for shape in shapes:
         for c in colors:
@@ -1200,7 +2016,7 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
                 break
         if ok_all:
             abs_ops.append(OpBrightOverlayAllWindows(window_shape=shape))
-    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=3, min_depth=2, start_type=GridState, end_type=ColorState)
+    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     t3=time.perf_counter()
     nodes_abs = len(PATTERN_KINDS)*9*3 + 3  # add 3 colorless overlay seeds
     return {

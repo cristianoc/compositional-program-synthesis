@@ -92,7 +92,8 @@ def detect_pattern_overlays(
                         schema[i][j] = tok
                 else:
                     (i, j) = poss[0]
-                    schema[i][j] = "*"
+                    # For colorless schemas, keep singletons as numeric constants to anchor matches
+                    schema[i][j] = int(v)
             return schema
 
         for r in range(H):
@@ -159,7 +160,8 @@ def detect_pattern_overlays(
                         schema[i][j] = tok
                 else:
                     (i, j) = poss[0]
-                    schema[i][j] = "*"
+                    # Keep singletons as numeric constants to anchor matches in colorless mode
+                    schema[i][j] = int(v)
             return schema
 
         # Valid centers where a full window fits inside the grid
