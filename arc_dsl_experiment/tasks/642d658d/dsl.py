@@ -209,14 +209,6 @@ def combined_window_nxm_schema(task: Dict, color: int, *, window_shape: tuple[in
 
  
 # ===================== Abstraction & Predicates =====================
-def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
-    r, c = r1-1, c1-1  # caller passes 1-based
-    H, W = g.shape; vals=[]
-    if r-1>=0: vals.append(int(g[r-1,c]))
-    if r+1<H:  vals.append(int(g[r+1,c]))
-    if c-1>=0: vals.append(int(g[r,c-1]))
-    if c+1<W:  vals.append(int(g[r,c+1]))
-    return vals
 class PatternOverlayExtractor:
     def __init__(self):
         self.overlays: List[dict] = []
@@ -356,23 +348,7 @@ def predict_with_pattern_kind(grid: List[List[int]], kind: str, color: int) -> i
     assert isinstance(out, ColorState)
     return int(out.color)
 
-# Global/simple color rules
-def rule_argmin_hist(x: np.ndarray) -> int:
-    vals, cnt = np.unique(x[x!=0], return_counts=True)
-    if len(vals)==0: return 0
-    return int(vals[np.argmin(cnt)])
-def rule_max_id(x: np.ndarray) -> int:
-    vals = np.unique(x[x!=0])
-    return int(vals.max()) if len(vals) else 0
 # Local-structure color rules
-def _ring8_vals(g: np.ndarray, r: int, c: int):
-    H,W = g.shape; vals=[]
-    for dr in (-1,0,1):
-        for dc in (-1,0,1):
-            if dr==0 and dc==0: continue
-            rr,cc = r+dr, c+dc
-            if 0<=rr<H and 0<=cc<W: vals.append(int(g[rr,cc]))
-    return vals
 def _cross4_vals_any(g: np.ndarray, r: int, c: int):
     H,W = g.shape; vals=[]
     if r-1>=0: vals.append(int(g[r-1,c]))
@@ -411,23 +387,319 @@ def sel_color_argmax_uniform_cross_color_count(x_hat: np.ndarray) -> int:
         if n>best_n or (n==best_n and c<best_c):
             best_c, best_n = c, n
     return best_c if best_n>0 else 0
-def sel_color_uniform_ring_mode(x_hat: np.ndarray) -> int:
-    g = np.asarray(x_hat, dtype=int); H,W = g.shape; picks=[]
+def rule_h3_flank_mode(x_hat: np.ndarray) -> int:
+    """Horizontal shape-aware rule: mode of flank colors in [x, c, x] triples.
+
+    Scans all horizontal triples; when left==right!=0, record that flank color.
+    Returns the mode (tie -> smallest). If none found, returns global mode of non-zero colors.
+    """
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    picks: list[int] = []
     for r in range(H):
-        for c in range(W):
-            vals=_ring8_vals(g,r,c)
-            if vals and len(set(vals))==1 and vals[0]!=0:
-                picks.append(vals[0])
+        for c in range(1, W-1):
+            a, b = int(g[r, c-1]), int(g[r, c+1])
+            if a == b and a != 0:
+                picks.append(a)
     if not picks:
         vals, cnt = np.unique(g[g!=0], return_counts=True)
         return int(vals[np.argmax(cnt)]) if len(vals) else 0
     return _mode_int(picks)
-COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = [
-    ("argmin_hist", rule_argmin_hist),
-    ("max_id", rule_max_id),
+def rule_v3_flank_mode(x_hat: np.ndarray) -> int:
+    """Vertical shape-aware rule: mode of flank colors in vertical [x, c, x] triples.
+
+    Scans all vertical triples; when up==down!=0, record that flank color.
+    Returns the mode (tie -> smallest). If none found, returns global mode of non-zero colors.
+    """
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    picks: list[int] = []
+    for r in range(1, H-1):
+        for c in range(W):
+            a, b = int(g[r-1, c]), int(g[r+1, c])
+            if a == b and a != 0:
+                picks.append(a)
+    if not picks:
+        vals, cnt = np.unique(g[g!=0], return_counts=True)
+        return int(vals[np.argmax(cnt)]) if len(vals) else 0
+    return _mode_int(picks)
+    
+def rule_best_center_cross_mode(x_hat: np.ndarray) -> int:
+    """Pick a center color c (1..9) maximizing the number of uniform 4-cross windows.
+
+    For each grid cell equal to c, if its 4-neighborhood (up,down,left,right) is
+    uniform and non-zero, record that color. Select the c with the largest number
+    of such hits (tie -> smaller c), then return the mode of recorded colors for
+    that c (tie -> smaller color). If no hits exist for any c, return 0.
+    """
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    best_c = 0
+    best_hits = -1
+    best_colors: list[int] = []
+    for c0 in range(1, 10):
+        hits: list[int] = []
+        for r in range(H):
+            for c in range(W):
+                if int(g[r, c]) != c0:
+                    continue
+                vals = _cross4_vals_any(g, r, c)
+                if len(vals)==4 and len(set(vals))==1 and vals[0]!=0:
+                    hits.append(int(vals[0]))
+        if hits:
+            if len(hits) > best_hits or (len(hits) == best_hits and c0 < best_c):
+                best_hits = len(hits)
+                best_c = c0
+                best_colors = hits
+    if best_hits <= 0:
+        return 0
+    return _mode_int(best_colors)
+    
+
+# ---------- Center-choosers and center-conditioned outputs (for composition) ----------
+def _collect_full_33_windows_for_center(g: np.ndarray, c0: int) -> List[np.ndarray]:
+    H, W = g.shape
+    wins: List[np.ndarray] = []
+    for r in range(1, H-1):
+        for c in range(1, W-1):
+            if int(g[r, c]) != int(c0):
+                continue
+            wins.append(g[r-1:r+2, c-1:c+2])
+    return wins
+
+_REL_CROSS_33 = [(-1,0),(1,0),(0,-1),(0,1)]
+
+def _cross_equal_implied_across_windows(wins: List[np.ndarray]) -> bool:
+    if not wins:
+        return False
+    # For each pair of cross positions, verify equality across all windows
+    for i in range(len(_REL_CROSS_33)):
+        for j in range(i+1, len(_REL_CROSS_33)):
+            dri, dci = _REL_CROSS_33[i]
+            drj, dcj = _REL_CROSS_33[j]
+            base = int(wins[0][1+dri, 1+dci]) - int(wins[0][1+drj, 1+dcj])
+            for wv in wins:
+                if int(wv[1+dri, 1+dci]) != int(wv[1+drj, 1+dcj]):
+                    return False
+    return True
+
+def choose_center_cross_implied_33(x_hat: np.ndarray) -> int:
+    g = np.asarray(x_hat, dtype=int)
+    best_c = 0
+    best_n = -1
+    for c0 in range(1,10):
+        wins = _collect_full_33_windows_for_center(g, c0)
+        if not wins:
+            continue
+        if _cross_equal_implied_across_windows(wins):
+            n = len(wins)
+            if n>best_n or (n==best_n and c0<best_c):
+                best_n = n
+                best_c = c0
+    return best_c if best_n>0 else 0
+
+def choose_center_best_flank(x_hat: np.ndarray) -> int:
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    best_c = 0
+    best_hits = -1
+    for c0 in range(1,10):
+        hits = 0
+        for r in range(H):
+            for c in range(W):
+                if int(g[r,c]) != c0:
+                    continue
+                if c-1>=0 and c+1<W:
+                    a,b = int(g[r,c-1]), int(g[r,c+1])
+                    if a==b and a!=0:
+                        hits+=1
+                if r-1>=0 and r+1<H:
+                    a,b = int(g[r-1,c]), int(g[r+1,c])
+                    if a==b and a!=0:
+                        hits+=1
+        if hits>best_hits or (hits==best_hits and c0<best_c):
+            best_hits = hits; best_c = c0
+    return best_c if best_hits>0 else 0
+
+def choose_center_best_cross(x_hat: np.ndarray) -> int:
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    best_c = 0
+    best_hits = -1
+    for c0 in range(1,10):
+        wins = _collect_full_33_windows_for_center(g, c0)
+        hits = 0
+        for wv in wins:
+            vals = [int(wv[1+dr,1+dc]) for (dr,dc) in _REL_CROSS_33]
+            if len(set(vals))==1 and vals[0]!=0:
+                hits+=1
+        if hits>best_hits or (hits==best_hits and c0<best_c):
+            best_hits = hits; best_c = c0
+    return best_c if best_hits>0 else 0
+
+def out_mode_cross_for_center_33(x_hat: np.ndarray, c0: int) -> int:
+    g = np.asarray(x_hat, dtype=int)
+    wins = _collect_full_33_windows_for_center(g, c0)
+    cols: List[int] = []
+    for wv in wins:
+        vals = [int(wv[1+dr,1+dc]) for (dr,dc) in _REL_CROSS_33]
+        if len(set(vals))==1 and vals[0]!=0:
+            cols.append(int(vals[0]))
+    return _mode_int(cols) if cols else 0
+
+def out_mode_flank_for_center(x_hat: np.ndarray, c0: int) -> int:
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    cols: List[int] = []
+    for r in range(H):
+        for c in range(W):
+            if int(g[r,c]) != c0:
+                continue
+            if c-1>=0 and c+1<W:
+                a,b = int(g[r,c-1]), int(g[r,c+1])
+                if a==b and a!=0:
+                    cols.append(a)
+            if r-1>=0 and r+1<H:
+                a,b = int(g[r-1,c]), int(g[r+1,c])
+                if a==b and a!=0:
+                    cols.append(a)
+    return _mode_int(cols) if cols else 0
+
+def _compose_center_to_output(name: str, choose_fn: Callable[[np.ndarray], int], out_fn: Callable[[np.ndarray, int], int]) -> Tuple[str, Callable[[np.ndarray], int]]:
+    def f(x: np.ndarray) -> int:
+        c = int(choose_fn(x))
+        return int(out_fn(x, c)) if c!=0 else 0
+    return (name, f)
+
+def _compose_choose_first(name: str, c1: Callable[[np.ndarray], int], c2: Callable[[np.ndarray], int]) -> Tuple[str, Callable[[np.ndarray], int]]:
+    def f(x: np.ndarray) -> int:
+        v = int(c1(x))
+        return v if v!=0 else int(c2(x))
+    return (name, f)
+def rule_best_center_flank_mode(x_hat: np.ndarray) -> int:
+    """Scan each candidate center color c in 1..9 and collect flank evidence.
+
+    For every grid cell equal to c, if left/right are equal and non-zero, record that
+    flank color; likewise for up/down. Pick the c with the most total flank hits
+    (tie -> smaller c). Return the mode of recorded flank colors for that c (tie -> min).
+    If no evidence at all, return 0.
+    """
+    g = np.asarray(x_hat, dtype=int)
+    H, W = g.shape
+    best_c = 0
+    best_hits = -1
+    best_colors: list[int] = []
+    for c0 in range(1, 10):
+        hits: list[int] = []
+        for r in range(H):
+            for c in range(W):
+                if int(g[r, c]) != c0:
+                    continue
+                # horizontal flanks
+                if c - 1 >= 0 and c + 1 < W:
+                    a, b = int(g[r, c - 1]), int(g[r, c + 1])
+                    if a == b and a != 0:
+                        hits.append(a)
+                # vertical flanks
+                if r - 1 >= 0 and r + 1 < H:
+                    a, b = int(g[r - 1, c]), int(g[r + 1, c])
+                    if a == b and a != 0:
+                        hits.append(a)
+        if hits:
+            if len(hits) > best_hits or (len(hits) == best_hits and c0 < best_c):
+                best_hits = len(hits)
+                best_c = c0
+                best_colors = hits
+    if best_hits <= 0:
+        return 0
+    return _mode_int(best_colors)
+# ---- G Core: base rules ----
+COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("uniform_cross_everywhere_mode", sel_color_uniform_cross_everywhere_mode),
     ("argmax_uniform_cross_color_count", sel_color_argmax_uniform_cross_color_count),
+    ("best_center_flank_mode", rule_best_center_flank_mode),
+    ("best_center_cross_mode", rule_best_center_cross_mode),
+    ("h3_flank_mode", rule_h3_flank_mode),
+    ("v3_flank_mode", rule_v3_flank_mode),
 ]
+
+# ---- G Core: simple compositional rules ----
+def _compose_first_nonzero(name: str, *fs: Callable[[np.ndarray], int]) -> Tuple[str, Callable[[np.ndarray], int]]:
+    def f(x: np.ndarray) -> int:
+        for fn in fs:
+            v = int(fn(x))
+            if v != 0:
+                return v
+        return 0
+    return (name, f)
+
+def _compose_mode_nonzero(name: str, *fs: Callable[[np.ndarray], int]) -> Tuple[str, Callable[[np.ndarray], int]]:
+    def f(x: np.ndarray) -> int:
+        vals = [int(fn(x)) for fn in fs]
+        vals = [v for v in vals if v != 0]
+        if not vals:
+            return 0
+        return _mode_int(vals)
+    return (name, f)
+
+def _build_composed_rules(base: List[Tuple[str, Callable[[np.ndarray], int]]]) -> List[Tuple[str, Callable[[np.ndarray], int]]]:
+    # Limit to the four most structural base rules to keep the space small
+    pick_names = {
+        "uniform_cross_everywhere_mode",
+        "argmax_uniform_cross_color_count",
+        "best_center_flank_mode",
+        "best_center_cross_mode",
+        "h3_flank_mode",
+        "v3_flank_mode",
+    }
+    core = [(n, f) for (n, f) in base if n in pick_names]
+    comps: List[Tuple[str, Callable[[np.ndarray], int]]] = []
+    for i, (n1, f1) in enumerate(core):
+        for j, (n2, f2) in enumerate(core):
+            if i == j:
+                continue
+            comps.append(_compose_first_nonzero(f"first_nonzero({n1},{n2})", f1, f2))
+            comps.append(_compose_mode_nonzero(f"mode_nonzero({n1},{n2})", f1, f2))
+    # A couple of three-way compositions
+    name_map = {n: f for (n, f) in core}
+    def add_tri_first(a,b,c):
+        if a in name_map and b in name_map and c in name_map:
+            comps.append(_compose_first_nonzero(f"first_nonzero({a},{b},{c})", name_map[a], _compose_first_nonzero("_tmp", name_map[b], name_map[c])[1]))
+    def add_tri_mode(a,b,c):
+        if a in name_map and b in name_map and c in name_map:
+            comps.append(_compose_mode_nonzero(f"mode_nonzero({a},{b},{c})", name_map[a], _compose_mode_nonzero("_tmp", name_map[b], name_map[c])[1]))
+    add_tri_first("h3_flank_mode", "v3_flank_mode", "uniform_cross_everywhere_mode")
+    add_tri_mode("h3_flank_mode", "v3_flank_mode", "argmax_uniform_cross_color_count")
+    # Center-to-output compositions
+    choose_map = {
+        "choose_cross_implied_33": choose_center_cross_implied_33,
+        "choose_best_flank": choose_center_best_flank,
+        "choose_best_cross": choose_center_best_cross,
+    }
+    out_map = {
+        "out_cross_mode_33": out_mode_cross_for_center_33,
+        "out_flank_mode": out_mode_flank_for_center,
+    }
+    # Direct two-stage compositions
+    for cn, cf in choose_map.items():
+        for on, of in out_map.items():
+            comps.append(_compose_center_to_output(f"compose({cn}->{on})", cf, of))
+    # Fallback choose then output
+    combos = [
+        ("choose_first(crossImplied,bestCross)", choose_center_cross_implied_33, choose_center_best_cross),
+        ("choose_first(bestCross,bestFlank)", choose_center_best_cross, choose_center_best_flank),
+    ]
+    for nm, c1, c2 in combos:
+        choose_fn = _compose_choose_first(nm, c1, c2)[1]
+        comps.append(_compose_center_to_output(f"compose({nm}->out_cross_mode_33)", choose_fn, out_mode_cross_for_center_33))
+    return comps
+
+# Build composed rules once.
+COLOR_RULES_COMPOSED: List[Tuple[str, Callable[[np.ndarray], int]]] = _build_composed_rules(COLOR_RULES_BASE)
+
+# Expose G as composed-only to ensure solutions require composition.
+# This guarantees no single base rule can solve without being part of a composition.
+COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = COLOR_RULES_COMPOSED
 # ===================== Enumeration & Printing =====================
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
