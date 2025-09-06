@@ -57,7 +57,7 @@ def main():
     from importlib import reload
     reload(dsl)
     setattr(dsl, 'WINDOW_SHAPE_DEFAULT', BASE_DEFAULT_SHAPE)
-    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)
+    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=[(1,3),(3,1),(3,3)])
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
     try:
