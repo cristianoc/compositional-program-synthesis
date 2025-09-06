@@ -3,7 +3,7 @@
 # This script:
 #  • Loads task.json and enumerates program spaces (G vs. Abstraction) and checks ALL train
 #  • Prints programs found & node counts/timings                            (README_clean.md §4)
-#  • Renders annotated images (overlays + predicted color)                  (README_clean.md Figures)
+#  • Renders annotated images (universal matches + predicted color)        (README_clean.md Figures)
 # No behavior changes are made; this is the exact harness used for results.
 # -----------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ def main():
     task = json.loads(Path(TASK_PATH).read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
 
-    # Enumerate once: both G and ABS (ABS includes all three overlay shape instantiations)
+    # Enumerate once: both G and ABS (ABS includes all three universal shapes)
     from importlib import reload
     reload(dsl)
     res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=[(1,3),(3,1),(3,3)])
@@ -66,11 +66,6 @@ def main():
     except Exception as e:
         print("[warn] failed to write programs_found.json:", e)
 
-    # Measure timing and counts (single pass, rounded to reduce noise)
-    def measure(task, seed=11):
-        # Use DSL's unified measurement which runs composition search for both G and ABS
-        return dsl.measure_spaces(task, seed=seed)
-
     # Use single-pass stats from enumeration result
     stats = {
         "G": {"nodes": len(dsl.COLOR_RULES), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
@@ -78,12 +73,9 @@ def main():
     }
     print("\n=== STATS (single-pass) ===")
     print(stats)
-    # Removed overlay-based evaluation and predictions
     # Prepare capture for schema output
-    schema_lines: list[str] = []
     def sprint(msg: str = ""):
         print(msg)
-        schema_lines.append(msg)
 
     # Print intersected universal schemas per shape (train+test)
     try:
@@ -104,24 +96,9 @@ def main():
     except Exception as e:
         sprint(f"[warn] failed to print universal schemas: {e}")
 
-    # Save captured schema output to file
-    out_path = HERE / "schema_print.txt"
-    try:
-        out_path.write_text("\n".join(schema_lines) + "\n", encoding="utf-8")
-        print("Saved schema print to", out_path)
-    except Exception as e:
-        print("[warn] failed to write schema_print.txt:", e)
+    # Save captured schema output to file (removed)
 
-    # Removed overlay counts
-    # Emit a tracked artifact with stable ordering
-    out_stats = HERE / "repro_stats.json"
-    with open(out_stats, "w", encoding="utf-8") as f:
-        json.dump(stats, f, indent=2, sort_keys=True)
-    print(f"Wrote {out_stats}")
-
-    # Removed per-example overlay stats and images
-
-    # Render pictures (train + test) without matplotlib for better determinism
+    # Render pictures (universal matches) without matplotlib for better determinism
     os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
     PALETTE = {
         0:(0,0,0), 1:(0,0,255), 2:(255,0,0), 3:(0,255,0), 4:(255,255,0),
@@ -139,14 +116,6 @@ def main():
 
     def upsample(img: np.ndarray, scale: int) -> np.ndarray:
         return np.repeat(np.repeat(img, scale, axis=0), scale, axis=1)
-
-    def draw_rect_outline(img: np.ndarray, y1: int, x1: int, y2: int, x2: int, color=(255,255,0), scale: int = 16):
-        # draw a 1-pixel outline in scaled space
-        yy1, xx1, yy2, xx2 = y1*scale, x1*scale, (y2+1)*scale-1, (x2+1)*scale-1
-        img[yy1:yy1+1, xx1:xx2+1, :] = color
-        img[yy2:yy2+1, xx1:xx2+1, :] = color
-        img[yy1:yy2+1, xx1:xx1+1, :] = color
-        img[yy1:yy2+1, xx2:xx2+1, :] = color
 
     def save_png(path: str, rgb: np.ndarray):
         import struct, binascii
@@ -200,6 +169,14 @@ def main():
         with open(path, "wb") as f:
             f.write(png)
 
+    def draw_rect_outline(img: np.ndarray, y1: int, x1: int, y2: int, x2: int, color=(255,255,0), scale: int = 16):
+        # draw a 1-pixel outline in scaled space
+        yy1, xx1, yy2, xx2 = y1*scale, x1*scale, (y2+1)*scale-1, (x2+1)*scale-1
+        img[yy1:yy1+1, xx1:xx2+1, :] = color
+        img[yy2:yy2+1, xx1:xx2+1, :] = color
+        img[yy1:yy2+1, xx1:xx1+1, :] = color
+        img[yy1:yy2+1, xx2:xx2+1, :] = color
+
     def _font_3x5():
         # 3x5 pixel font for A-Z, 0-9 and space
         F = {
@@ -252,204 +229,6 @@ def main():
                         if 0 <= yy < H and 0 <= xx < W:
                             img[yy:yy+scale, xx:xx+scale, :] = color
             cx += (3*scale + scale)  # glyph width + 1 space
-
-    def render_grid_with_overlays(g, pred_color, title, out_path, kind="window_nxm", color: int = 1):
-        g = np.asarray(g, dtype=int)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color, window_shape=window_shape)
-        SCALE = 16
-        base = upsample(grid_to_rgb(g), scale=SCALE)
-        # draw overlays
-        for ov in sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"])):
-            y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
-            draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
-        # Compose a visible single cell for predicted color to the right
-        Hs = base.shape[0]
-        spacer_w = 8
-        spacer = np.full((Hs + 16, spacer_w, 3), 255, dtype=np.uint8)
-        # Equalize panel widths: input and output panels each get max width
-        in_w = base.shape[1]
-        out_w = max(in_w, SCALE)
-        # Pad input panel to out_w if needed (usually already >= SCALE)
-        if in_w < out_w:
-            pad = np.full((Hs, out_w - in_w, 3), 255, dtype=np.uint8)
-            base_panel = np.concatenate([base, pad], axis=1)
-        else:
-            base_panel = base
-        # Build output panel with width out_w; draw single predicted cell at left
-        out_panel = np.full((Hs, out_w, 3), 255, dtype=np.uint8)
-        out_panel[0:SCALE, 0:SCALE, :] = PALETTE.get(int(pred_color), (0,0,0))
-        # Add margins around both panels
-        def add_border(img: np.ndarray, m: int = 8) -> np.ndarray:
-            h, w, _ = img.shape
-            bordered = np.full((h + 2*m, w + 2*m, 3), 255, dtype=np.uint8)
-            bordered[m:m+h, m:m+w, :] = img
-            return bordered
-        base_panel_b = add_border(base_panel, 8)
-        out_panel_b = add_border(out_panel, 8)
-        # Ensure both bordered panels have identical width (pad right with white if needed)
-        bw = base_panel_b.shape[1]
-        ow = out_panel_b.shape[1]
-        target_w = max(bw, ow)
-        if bw < target_w:
-            extra = np.full((base_panel_b.shape[0], target_w - bw, 3), 255, dtype=np.uint8)
-            base_panel_b = np.concatenate([base_panel_b, extra], axis=1)
-        if ow < target_w:
-            extra = np.full((out_panel_b.shape[0], target_w - ow, 3), 255, dtype=np.uint8)
-            out_panel_b = np.concatenate([out_panel_b, extra], axis=1)
-        # Match heights (in case borders changed heights slightly)
-        bh = base_panel_b.shape[0]
-        oh = out_panel_b.shape[0]
-        target_h = max(bh, oh)
-        if bh < target_h:
-            extra = np.full((target_h - bh, base_panel_b.shape[1], 3), 255, dtype=np.uint8)
-            base_panel_b = np.concatenate([base_panel_b, extra], axis=0)
-        if oh < target_h:
-            extra = np.full((target_h - oh, out_panel_b.shape[1], 3), 255, dtype=np.uint8)
-            out_panel_b = np.concatenate([out_panel_b, extra], axis=0)
-        composed = np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
-        # Add header with two lines: title; and "INPUT" left, "PREDICTED COLOR: N" right above columns
-        header_lines = 2
-        line_h = 5 * 2 + 4  # font height*scale + padding
-        header_h = header_lines * line_h
-        header = np.full((header_h, composed.shape[1], 3), 255, dtype=np.uint8)
-        # First line: title (uppercase simplified)
-        _draw_text(header, 4, 2, title, color=(0,0,0), scale=2)
-        # Second line: PREDICTED COLOR right
-        right_x = base_panel_b.shape[1] + spacer_w + 4
-        _draw_text(header, right_x, 2 + line_h, f"PREDICTED COLOR {int(pred_color)}", color=(0,0,0), scale=2)
-        composed = np.concatenate([header, composed], axis=0)
-        save_png(out_path, composed)
-        return out_path
-
-    # Internal: build panel without header (for mosaics)
-    def build_panel_body(g, pred_color, kind="window_nxm", color: int = 1, window_shape: Optional[tuple[int,int]] = None) -> np.ndarray:
-        g = np.asarray(g, dtype=int)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color, window_shape=window_shape)
-        SCALE = 16
-        base = upsample(grid_to_rgb(g), scale=SCALE)
-        for ov in sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"])):
-            y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
-            draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
-        Hs = base.shape[0]
-        spacer_w = 8
-        spacer = np.full((Hs + 16, spacer_w, 3), 255, dtype=np.uint8)
-        in_w = base.shape[1]
-        out_w = max(in_w, SCALE)
-        if in_w < out_w:
-            pad = np.full((Hs, out_w - in_w, 3), 255, dtype=np.uint8)
-            base_panel = np.concatenate([base, pad], axis=1)
-        else:
-            base_panel = base
-        out_panel = np.full((Hs, out_w, 3), 255, dtype=np.uint8)
-        out_panel[0:SCALE, 0:SCALE, :] = PALETTE.get(int(pred_color), (0,0,0))
-        def add_border(img: np.ndarray, m: int = 8) -> np.ndarray:
-            h, w, _ = img.shape
-            bordered = np.full((h + 2*m, w + 2*m, 3), 255, dtype=np.uint8)
-            bordered[m:m+h, m:m+w, :] = img
-            return bordered
-        base_panel_b = add_border(base_panel, 8)
-        out_panel_b = add_border(out_panel, 8)
-        bw = base_panel_b.shape[1]
-        ow = out_panel_b.shape[1]
-        target_w = max(bw, ow)
-        if bw < target_w:
-            extra = np.full((base_panel_b.shape[0], target_w - bw, 3), 255, dtype=np.uint8)
-            base_panel_b = np.concatenate([base_panel_b, extra], axis=1)
-        if ow < target_w:
-            extra = np.full((out_panel_b.shape[0], target_w - ow, 3), 255, dtype=np.uint8)
-            out_panel_b = np.concatenate([out_panel_b, extra], axis=1)
-        bh = base_panel_b.shape[0]
-        oh = out_panel_b.shape[0]
-        target_h = max(bh, oh)
-        if bh < target_h:
-            extra = np.full((target_h - bh, base_panel_b.shape[1], 3), 255, dtype=np.uint8)
-            base_panel_b = np.concatenate([base_panel_b, extra], axis=0)
-        if oh < target_h:
-            extra = np.full((target_h - oh, out_panel_b.shape[1], 3), 255, dtype=np.uint8)
-            out_panel_b = np.concatenate([out_panel_b, extra], axis=0)
-        spacer = np.full((target_h, spacer_w, 3), 255, dtype=np.uint8)
-        return np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
-
-    # Build a single mosaic image with all train + test rows and columns for kinds
-    def render_mosaic_all_examples(task, COLOR_1x3: int, COLOR_3x1: int, COLOR_Wn: int, out_path: str):
-        import numpy as np
-        base_shape = (3,3)
-        kinds: list[tuple[str, tuple[int,int], int]] = [("1x3", (1,3), COLOR_1x3), ("3x1", (3,1), COLOR_3x1), ("WINDOW", base_shape, COLOR_Wn)]
-        rows = []
-        row_labels = []
-        # Collect panels per row (train examples then test)
-        for idx, ex in enumerate(task["train"], start=1):
-            g = np.array(ex["input"], dtype=int)
-            pan = []
-            for _, shape, kc in kinds:
-                # Set shape for prediction
-                from importlib import reload
-                import dsl as _dsl
-                reload(_dsl)
-                setattr(_dsl, "WINDOW_SHAPE_DEFAULT", shape)
-                pred = _dsl.predict_with_pattern_kind(g.tolist(), "window_nxm", kc)
-                pan.append(build_panel_body(g, pred, kind="window_nxm", color=kc, window_shape=shape))
-            rows.append(pan); row_labels.append(f"TRAIN {idx}")
-        for idx, ex in enumerate(task["test"], start=1):
-            g = np.array(ex["input"], dtype=int)
-            pan = []
-            for _, shape, kc in kinds:
-                # Set shape for prediction
-                from importlib import reload
-                import dsl as _dsl
-                reload(_dsl)
-                setattr(_dsl, "WINDOW_SHAPE_DEFAULT", shape)
-                pred = _dsl.predict_with_pattern_kind(g.tolist(), "window_nxm", kc)
-                pan.append(build_panel_body(g, pred, kind="window_nxm", color=kc, window_shape=shape))
-            rows.append(pan); row_labels.append(f"TEST {idx}")
-
-        # Equalize panel widths per column
-        ncols = len(kinds)
-        nrows = len(rows)
-        col_widths = [0]*ncols
-        row_heights = [0]*nrows
-        for r in range(nrows):
-            for c in range(ncols):
-                h, w, _ = rows[r][c].shape
-                col_widths[c] = max(col_widths[c], w)
-                row_heights[r] = max(row_heights[r], h)
-        # Pad panels to column widths and row heights
-        for r in range(nrows):
-            for c in range(ncols):
-                img = rows[r][c]
-                h, w, _ = img.shape
-                target_h = row_heights[r]; target_w = col_widths[c]
-                if w < target_w:
-                    extra = np.full((h, target_w - w, 3), 255, dtype=np.uint8)
-                    img = np.concatenate([img, extra], axis=1)
-                if h < target_h:
-                    extra = np.full((target_h - h, img.shape[1], 3), 255, dtype=np.uint8)
-                    img = np.concatenate([img, extra], axis=0)
-                rows[r][c] = img
-
-        # Column headers
-        header_h = 5*2 + 6
-        col_header = np.full((header_h, sum(col_widths) + (ncols-1)*8 + 150, 3), 255, dtype=np.uint8)
-        x = 150
-        for (label, _, _), w in zip(kinds, col_widths):
-            _draw_text(col_header, x + 8, 2, label, color=(0,0,0), scale=2)
-            x += w + 8
-
-        # Build each row image with left label area
-        mosaic_rows = [col_header]
-        for r in range(nrows):
-            left = np.full((row_heights[r], 150, 3), 255, dtype=np.uint8)
-            _draw_text(left, 8, 8, row_labels[r], color=(0,0,0), scale=2)
-            row_imgs = [left]
-            for c in range(ncols):
-                if c>0:
-                    row_imgs.append(np.full((row_heights[r], 8, 3), 255, dtype=np.uint8))
-                row_imgs.append(rows[r][c])
-            mosaic_rows.append(np.concatenate(row_imgs, axis=1))
-
-        mosaic = np.concatenate(mosaic_rows, axis=0)
-        save_png(out_path, mosaic)
-        return out_path
 
     # Universal matcher mosaic (replacement for overlay mosaic)
     try:
