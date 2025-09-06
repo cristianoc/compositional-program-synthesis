@@ -233,31 +233,14 @@ def main():
         f.write("\n")
     print("Wrote", HERE / "pattern_stats.json")
 
-    # Render pictures (train + test)
-    # Attempt to make PNG outputs reproducible
+    # Render pictures (train + test) without matplotlib for better determinism
     os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    plt.rcParams.update({
-        "figure.dpi": 150,
-        "savefig.dpi": 150,
-        "savefig.transparent": False,
-        "savefig.facecolor": "white",
-        "savefig.edgecolor": "white",
-        "font.family": "DejaVu Sans",
-        "text.antialiased": False,
-        "lines.antialiased": False,
-        "patch.antialiased": False,
-        "path.simplify": False,
-    })
-    from matplotlib.patches import Rectangle
-    from matplotlib.lines import Line2D
-
     PALETTE = {
         0:(0,0,0), 1:(0,0,255), 2:(255,0,0), 3:(0,255,0), 4:(255,255,0),
         5:(128,128,128), 6:(255,192,203), 7:(255,165,0), 8:(0,128,128), 9:(139,69,19)
     }
+    YELLOW = (255,255,0)
+
     def grid_to_rgb(g, palette=PALETTE):
         g = np.asarray(g, dtype=int)
         H, W = g.shape
@@ -266,33 +249,154 @@ def main():
             img[g == k] = (r, gg, b)
         return img
 
-    def render_grid_with_overlays(g, pred_color, title, out_path, kind="h3", color: int = 1):
-        rgb = grid_to_rgb(g)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
-        H, W = g.shape
-        fig, axes = plt.subplots(1, 2, figsize=(12, 8), dpi=150)
-        axes_any: Any = axes
-        ax = axes_any[0]
-        ax.imshow(rgb, interpolation='nearest')
-        ax.set_title(title, fontsize=12)
-        ax.set_xticks([]); ax.set_yticks([])
-        overlays_sorted = sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"]))
-        for ov in overlays_sorted:
-                y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
-                rect = Rectangle((x1 - 0.5, y1 - 0.5), (x2 - x1 + 1), (y2 - y1 + 1), fill=False, linewidth=1.5, edgecolor='yellow')
-                ax.add_patch(rect)
-        ax.set_xlim(-0.5, W-0.5); ax.set_ylim(H-0.5, -0.5)
+    def upsample(img: np.ndarray, scale: int) -> np.ndarray:
+        return np.repeat(np.repeat(img, scale, axis=0), scale, axis=1)
 
-        ax2 = axes_any[1]
-        tile = np.full((20, 20, 3), PALETTE.get(int(pred_color), (0,0,0)), dtype=np.uint8)
-        ax2.imshow(tile, interpolation='nearest')
-        ax2.set_title(f"Predicted Color: {int(pred_color)}", fontsize=12)
-        ax2.set_xticks([]); ax2.set_yticks([])
-        # Use fixed metadata to avoid time stamps or varying text chunks in PNG
-        meta: dict[str, Optional[str]] = {"Date": "1970-01-01T00:00:00", "Software": "arc-repro"}
-        # Avoid tight_layout heuristics shifting content; rely on fixed bbox
-        plt.savefig(out_path, bbox_inches="tight", metadata=meta)
-        plt.close(fig)
+    def draw_rect_outline(img: np.ndarray, y1: int, x1: int, y2: int, x2: int, color=(255,255,0), scale: int = 16):
+        # draw a 1-pixel outline in scaled space
+        yy1, xx1, yy2, xx2 = y1*scale, x1*scale, (y2+1)*scale-1, (x2+1)*scale-1
+        img[yy1:yy1+1, xx1:xx2+1, :] = color
+        img[yy2:yy2+1, xx1:xx2+1, :] = color
+        img[yy1:yy2+1, xx1:xx1+1, :] = color
+        img[yy1:yy2+1, xx2:xx2+1, :] = color
+
+    def save_png(path: str, rgb: np.ndarray):
+        import struct, zlib, binascii
+        H, W, C = rgb.shape
+        assert C == 3
+        # Build raw bytes with no filter per row
+        raw = b''.join(b"\x00" + rgb[i].tobytes() for i in range(H))
+        # PNG chunks
+        def chunk(typ: bytes, data: bytes) -> bytes:
+            return (struct.pack(">I", len(data)) + typ + data +
+                    struct.pack(">I", binascii.crc32(typ + data) & 0xffffffff))
+        sig = b"\x89PNG\r\n\x1a\n"
+        ihdr = struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0)
+        # Use no compression (level=0) to reduce variability across zlib versions
+        idat = zlib.compress(raw, 0)
+        png = sig + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
+        with open(path, "wb") as f:
+            f.write(png)
+
+    def _font_3x5():
+        # 3x5 pixel font for A-Z, 0-9 and space
+        F = {
+            ' ': ["000","000","000","000","000"],
+            'A': ["010","101","111","101","101"],
+            'C': ["011","100","100","100","011"],
+            'D': ["110","101","101","101","110"],
+            'E': ["111","100","110","100","111"],
+            'G': ["011","100","101","101","011"],
+            'H': ["101","101","111","101","101"],
+            'I': ["111","010","010","010","111"],
+            'L': ["100","100","100","100","111"],
+            'N': ["101","111","111","111","101"],
+            'O': ["010","101","101","101","010"],
+            'P': ["110","101","110","100","100"],
+            'R': ["110","101","110","101","101"],
+            'S': ["011","100","010","001","110"],
+            'T': ["111","010","010","010","010"],
+            'U': ["101","101","101","101","111"],
+            'V': ["101","101","101","101","010"],
+            'Y': ["101","101","010","010","010"],
+            'G': ["011","100","101","101","011"],
+            'M': ["101","111","101","101","101"],
+            'K': ["101","101","110","101","101"],
+            'X': ["101","101","010","101","101"],
+            '0': ["111","101","101","101","111"],
+            '1': ["010","110","010","010","111"],
+            '2': ["111","001","111","100","111"],
+            '3': ["111","001","111","001","111"],
+            '4': ["101","101","111","001","001"],
+            '5': ["111","100","111","001","111"],
+            '6': ["111","100","111","101","111"],
+            '7': ["111","001","010","010","010"],
+            '8': ["111","101","111","101","111"],
+            '9': ["111","101","111","001","111"],
+        }
+        return F
+
+    def _draw_text(img: np.ndarray, x: int, y: int, text: str, color=(0,0,0), scale: int = 2):
+        F = _font_3x5()
+        cx = x
+        H, W, _ = img.shape
+        for ch in text.upper():
+            pat = F.get(ch, F[' '])
+            for r, row in enumerate(pat):
+                for c, bit in enumerate(row):
+                    if bit == '1':
+                        yy = y + r*scale
+                        xx = cx + c*scale
+                        if 0 <= yy < H and 0 <= xx < W:
+                            img[yy:yy+scale, xx:xx+scale, :] = color
+            cx += (3*scale + scale)  # glyph width + 1 space
+
+    def render_grid_with_overlays(g, pred_color, title, out_path, kind="h3", color: int = 1):
+        g = np.asarray(g, dtype=int)
+        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
+        SCALE = 16
+        base = upsample(grid_to_rgb(g), scale=SCALE)
+        # draw overlays
+        for ov in sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"])):
+            y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+            draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
+        # Compose a visible single cell for predicted color to the right
+        Hs = base.shape[0]
+        spacer_w = 8
+        spacer = np.full((Hs + 16, spacer_w, 3), 255, dtype=np.uint8)
+        # Equalize panel widths: input and output panels each get max width
+        in_w = base.shape[1]
+        out_w = max(in_w, SCALE)
+        # Pad input panel to out_w if needed (usually already >= SCALE)
+        if in_w < out_w:
+            pad = np.full((Hs, out_w - in_w, 3), 255, dtype=np.uint8)
+            base_panel = np.concatenate([base, pad], axis=1)
+        else:
+            base_panel = base
+        # Build output panel with width out_w; draw single predicted cell at left
+        out_panel = np.full((Hs, out_w, 3), 255, dtype=np.uint8)
+        out_panel[0:SCALE, 0:SCALE, :] = PALETTE.get(int(pred_color), (0,0,0))
+        # Add margins around both panels
+        def add_border(img: np.ndarray, m: int = 8) -> np.ndarray:
+            h, w, _ = img.shape
+            bordered = np.full((h + 2*m, w + 2*m, 3), 255, dtype=np.uint8)
+            bordered[m:m+h, m:m+w, :] = img
+            return bordered
+        base_panel_b = add_border(base_panel, 8)
+        out_panel_b = add_border(out_panel, 8)
+        # Ensure both bordered panels have identical width (pad right with white if needed)
+        bw = base_panel_b.shape[1]
+        ow = out_panel_b.shape[1]
+        target_w = max(bw, ow)
+        if bw < target_w:
+            extra = np.full((base_panel_b.shape[0], target_w - bw, 3), 255, dtype=np.uint8)
+            base_panel_b = np.concatenate([base_panel_b, extra], axis=1)
+        if ow < target_w:
+            extra = np.full((out_panel_b.shape[0], target_w - ow, 3), 255, dtype=np.uint8)
+            out_panel_b = np.concatenate([out_panel_b, extra], axis=1)
+        # Match heights (in case borders changed heights slightly)
+        bh = base_panel_b.shape[0]
+        oh = out_panel_b.shape[0]
+        target_h = max(bh, oh)
+        if bh < target_h:
+            extra = np.full((target_h - bh, base_panel_b.shape[1], 3), 255, dtype=np.uint8)
+            base_panel_b = np.concatenate([base_panel_b, extra], axis=0)
+        if oh < target_h:
+            extra = np.full((target_h - oh, out_panel_b.shape[1], 3), 255, dtype=np.uint8)
+            out_panel_b = np.concatenate([out_panel_b, extra], axis=0)
+        composed = np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
+        # Add header with two lines: title; and "INPUT" left, "PREDICTED COLOR: N" right above columns
+        header_lines = 2
+        line_h = 5 * 2 + 4  # font height*scale + padding
+        header_h = header_lines * line_h
+        header = np.full((header_h, composed.shape[1], 3), 255, dtype=np.uint8)
+        # First line: title (uppercase simplified)
+        _draw_text(header, 4, 2, title, color=(0,0,0), scale=2)
+        # Second line: PREDICTED COLOR right
+        right_x = base_panel_b.shape[1] + spacer_w + 4
+        _draw_text(header, right_x, 2 + line_h, f"PREDICTED COLOR {int(pred_color)}", color=(0,0,0), scale=2)
+        composed = np.concatenate([header, composed], axis=0)
+        save_png(out_path, composed)
         return out_path
 
     # Train pics
