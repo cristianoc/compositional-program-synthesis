@@ -207,9 +207,7 @@ def combined_window_nxm_schema(task: Dict, color: int, *, window_shape: tuple[in
             schema[i][j] = tok
     return schema
 
-def combined_window_nxm_schema_string(task: Dict, color: int, *, window_shape: tuple[int,int]) -> str:
-    schema = combined_window_nxm_schema(task, color, window_shape=window_shape)
-    return "[" + ", ".join("[" + ", ".join(str(x) for x in row) + "]" for row in schema) + "]"
+ 
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
     r, c = r1-1, c1-1  # caller passes 1-based
@@ -348,75 +346,6 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         # No evidence from required pattern; return 0 (no fallback to cross-only)
         return ColorState(0)
 
-# Saved for later: schema-driven predicate variant for window_nxm.
-class OpSchemaDrivenPatternPredicate(Operation[OverlayContext, ColorState]):
-    input_type = OverlayContext
-    output_type = ColorState
-
-    def apply(self, state: OverlayContext) -> ColorState:
-        g = state.grid
-        from collections import Counter, defaultdict
-        flank_colors: List[int] = []
-        kind = getattr(state, "kind", None)
-        if kind != "window_nxm":
-            return ColorState(0)
-        for ov in state.overlays:
-            win = ov.get("window")
-            if win is None:
-                y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
-                win_arr = g[y1:y2+1, x1:x2+1].copy()
-                win = win_arr.astype(int).tolist()
-            schema = ov.get("schema")
-            if schema is None:
-                continue
-            nr = len(schema); nc = len(schema[0]) if nr>0 else 0
-            if nr==0 or any(len(row)!=nc for row in schema):
-                continue
-            if len(win)!=nr or any(len(row)!=nc for row in win):
-                continue
-            groups: dict[str, list[tuple[int,int]]] = defaultdict(list)
-            for i in range(nr):
-                for j in range(nc):
-                    tok = schema[i][j]
-                    if isinstance(tok, str) and tok != '*':
-                        groups[tok].append((i,j))
-            for coords in groups.values():
-                vals = [int(win[i][j]) for (i,j) in coords]
-                if vals and len(set(vals))==1 and vals[0]!=0:
-                    flank_colors.append(int(vals[0]))
-        if flank_colors:
-            cnt = Counter(flank_colors); top = max(cnt.values())
-            cands = [k for k,v in cnt.items() if v==top]
-            return ColorState(int(min(cands)))
-        return ColorState(0)
-def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
-    out: List[Optional[int]] = []
-    for ov in overlays:
-        r = ov["center_row"]; c = ov["center_col"]
-        vals = _cross_vals(g, r, c)
-        if len(vals)==4 and len(set(vals))==1 and vals[0]!=0:
-            out.append(vals[0])
-        else:
-            out.append(None)
-    return out
-def overlays_have_uniform_cross_color(g: np.ndarray, overlays: List[dict]):
-    colors = read_overlay_cross_colors(g, overlays)
-    if not colors: return (False, None, {"why":"no_overlays"})
-    if any(c is None for c in colors): return (False, None, {"why":"non_uniform_cross"})
-    if len(set(colors))!=1: return (False, None, {"why":"disagree"})
-    return (True, colors[0], {"count": len(colors)})
-def bright_overlay_cross_mode(g: np.ndarray, overlays: List[dict]) -> int:
-    from collections import Counter
-    colors=[]
-    for ov in overlays:
-        r = ov["center_row"]; c = ov["center_col"]
-        vals = _cross_vals(g, r, c)
-        if len(vals)==4 and len(set(vals))==1 and vals[0]!=0:
-            colors.append(vals[0])
-    if not colors: return 0
-    cnt = Counter(colors); m = max(cnt.values())
-    cands = [k for k,v in cnt.items() if v==m]
-    return int(min(cands))
 # Composed program body used in abstraction space: PatternOverlayExtractor |> UniformPatternPredicate |> OutputAgreedColor.
 def predict_window_nxm_uniform_color(grid: List[List[int]], color: int) -> int:
     # Typed pipeline: Grid -> OverlayContext -> Color
