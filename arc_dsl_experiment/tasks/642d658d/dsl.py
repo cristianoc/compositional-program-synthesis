@@ -41,6 +41,16 @@ class ColorState(State):
         self.color = int(color)
 
 
+class CenterState(State):
+    def __init__(self, grid: np.ndarray, center_color: int):
+        self.grid = np.asarray(grid, dtype=int)
+        self.center_color = int(center_color)
+
+
+class OpFailure(Exception):
+    pass
+
+
 InS = TypeVar("InS", bound=State)
 OutS = TypeVar("OutS", bound=State)
 
@@ -221,18 +231,22 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "window_nxm", color: Optional[int] = None):
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "window_nxm", color: Optional[int] = None, window_shape: Optional[tuple[int,int]] = None):
         self.absx = absx or PatternOverlayExtractor()
         self.kind = kind
         if color is None:
             raise ValueError("OpBrightOverlayIdentity requires explicit color")
         self.color = int(color)
+        self.window_shape = tuple(window_shape) if window_shape is not None else None
 
     def apply(self, state: GridState) -> OverlayContext:
         g = state.grid
         # Use configured pattern kind and default shape where applicable
         k = self.kind
-        ws: Optional[tuple[int,int]] = WINDOW_SHAPE_DEFAULT if k == "window_nxm" else None
+        # Select window shape override if provided, else default for kind
+        ws: Optional[tuple[int,int]] = None
+        if k == "window_nxm":
+            ws = self.window_shape if self.window_shape is not None else WINDOW_SHAPE_DEFAULT
         # Use the pattern kind and color for overlays
         ovs = detect_overlays(g.tolist(), kind=k, color=self.color, window_shape=ws)
         H, W = g.shape
@@ -613,6 +627,71 @@ def rule_best_center_flank_mode(x_hat: np.ndarray) -> int:
     if best_hits <= 0:
         return 0
     return _mode_int(best_colors)
+
+# ---- Typed operation wrappers for G composition (choose -> out) ----
+class OpChooseCenterCrossImplied33(Operation[GridState, CenterState]):
+    input_type = GridState
+    output_type = CenterState
+
+    label = "choose_cross_implied_33"
+
+    def apply(self, state: GridState) -> CenterState:
+        c = int(choose_center_cross_implied_33(state.grid))
+        if c == 0:
+            raise OpFailure("choose_cross_implied_33 failed: no center")
+        return CenterState(state.grid, c)
+
+
+class OpChooseCenterBestFlank(Operation[GridState, CenterState]):
+    input_type = GridState
+    output_type = CenterState
+
+    label = "choose_best_flank"
+
+    def apply(self, state: GridState) -> CenterState:
+        c = int(choose_center_best_flank(state.grid))
+        if c == 0:
+            raise OpFailure("choose_best_flank failed: no center")
+        return CenterState(state.grid, c)
+
+
+class OpChooseCenterBestCross(Operation[GridState, CenterState]):
+    input_type = GridState
+    output_type = CenterState
+
+    label = "choose_best_cross"
+
+    def apply(self, state: GridState) -> CenterState:
+        c = int(choose_center_best_cross(state.grid))
+        if c == 0:
+            raise OpFailure("choose_best_cross failed: no center")
+        return CenterState(state.grid, c)
+
+
+class OpOutCrossModeForCenter33(Operation[CenterState, ColorState]):
+    input_type = CenterState
+    output_type = ColorState
+
+    label = "out_cross_mode_33"
+
+    def apply(self, state: CenterState) -> ColorState:
+        y = int(out_mode_cross_for_center_33(state.grid, state.center_color))
+        if y == 0:
+            raise OpFailure("out_cross_mode_33 failed: no color")
+        return ColorState(y)
+
+
+class OpOutFlankModeForCenter(Operation[CenterState, ColorState]):
+    input_type = CenterState
+    output_type = ColorState
+
+    label = "out_flank_mode"
+
+    def apply(self, state: CenterState) -> ColorState:
+        y = int(out_mode_flank_for_center(state.grid, state.center_color))
+        if y == 0:
+            raise OpFailure("out_flank_mode failed: no color")
+        return ColorState(y)
 # ---- G Core: base rules ----
 COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("uniform_cross_everywhere_mode", sel_color_uniform_cross_everywhere_mode),
@@ -697,48 +776,132 @@ def _build_composed_rules(base: List[Tuple[str, Callable[[np.ndarray], int]]]) -
 # Build composed rules once.
 COLOR_RULES_COMPOSED: List[Tuple[str, Callable[[np.ndarray], int]]] = _build_composed_rules(COLOR_RULES_BASE)
 
-# Expose G as composed-only to ensure solutions require composition.
-# This guarantees no single base rule can solve without being part of a composition.
+# Expose G as composed-only (function-style) for backward compatibility with older reporting.
 COLOR_RULES: List[Tuple[str, Callable[[np.ndarray], int]]] = COLOR_RULES_COMPOSED
+
+# ---- Typed composition engine ----
+def _enumerate_typed_programs(
+    task: Dict,
+    ops: List[Operation],
+    *,
+    max_depth: int = 2,
+    min_depth: int = 2,
+    start_type: Type[State] = GridState,
+    end_type: Type[State] = ColorState,
+) -> List[Tuple[str, List[Operation]]]:
+    # Build train pairs once
+    train_pairs = [
+        (np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]
+    ]
+
+    def accepts_chain(seq: List[Operation]) -> bool:
+        if not seq:
+            return False
+        if not (seq[0].input_type is start_type or issubclass(start_type, seq[0].input_type)):
+            return False
+        for a, b in zip(seq, seq[1:]):
+            if not (b.input_type is a.output_type or issubclass(a.output_type, b.input_type)):
+                return False
+        return (seq[-1].output_type is end_type) or issubclass(seq[-1].output_type, end_type)
+
+    def label_of(op: Operation) -> str:
+        return getattr(op, "label", op.__class__.__name__)
+
+    winners: List[Tuple[str, List[Operation]]] = []
+    # Simple DFS over sequences up to max_depth
+    from itertools import product
+    # Expand sequences by chaining type-compatible ops
+    def extend(seq: List[Operation]) -> List[List[Operation]]:
+        outs: List[List[Operation]] = []
+        last = seq[-1]
+        for op in ops:
+            if op.input_type is last.output_type or issubclass(last.output_type, op.input_type):
+                outs.append(seq + [op])
+        return outs
+
+    # Start with ops that accept start_type
+    seeds = [op for op in ops if op.input_type is start_type or issubclass(start_type, op.input_type)]
+    frontier: List[List[Operation]] = [[op] for op in seeds]
+    for depth in range(1, max_depth + 1):
+        next_frontier: List[List[Operation]] = []
+        for seq in frontier:
+            if depth >= min_depth and accepts_chain(seq) and (seq[-1].output_type is end_type or issubclass(seq[-1].output_type, end_type)):
+                # Evaluate on train
+                ok = True
+                for x, y in train_pairs:
+                    state: State = GridState(x)
+                    try:
+                        for op in seq:
+                            if not op.accepts(state):
+                                raise OpFailure(f"type mismatch: {type(state).__name__} -> {op.__class__.__name__}")
+                            state = op.apply(state)  # type: ignore[arg-type]
+                        assert isinstance(state, ColorState)
+                        if int(state.color) != y:
+                            ok = False
+                            break
+                    except Exception:
+                        ok = False
+                        break
+                if ok:
+                    name = " |> ".join(label_of(op) for op in seq)
+                    winners.append((name, seq))
+            if depth < max_depth:
+                next_frontier.extend(extend(seq))
+        frontier = next_frontier
+    return winners
 # ===================== Enumeration & Printing =====================
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
-    train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    # G core (no pre-ops)
-    total_G = len(COLOR_RULES); valid_G: List[str] = []
-    for cn, cf in COLOR_RULES:
-        ok=True
-        for x,y in train_pairs:
-            if int(cf(x)) != y:
-                ok=False; break
-        if ok: valid_G.append(cn)
-    # Overlay + predicate across all pattern kinds and colors (no pre-ops)
-    colors = list(range(1,10))
+    # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
+    g_ops: List[Operation] = [
+        OpChooseCenterCrossImplied33(),
+        OpChooseCenterBestFlank(),
+        OpChooseCenterBestCross(),
+        OpOutCrossModeForCenter33(),
+        OpOutFlankModeForCenter(),
+    ]
+    winners_g = _enumerate_typed_programs(task, g_ops, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
+    programs_G = []
+    for name, _ in winners_g:
+        # Present in legacy style for G composed programs
+        if name.startswith("choose_"):
+            parts = name.split(" |> ")
+            if len(parts) == 2 and parts[1].startswith("out_"):
+                programs_G.append(f"compose({parts[0]}->{parts[1]})")
+            else:
+                programs_G.append(name)
+        else:
+            programs_G.append(name)
+    total_G = len(COLOR_RULES)
+
+    # Abstractions (overlay + predicate) for current window shape default
+    colors = list(range(1, 10))
     total_ABS = len(PATTERN_KINDS) * len(colors)
-    valid_ABS: List[Tuple[str,int]] = []
-    for kind in PATTERN_KINDS:
-        for c in colors:
-            # Optimization: skip candidates that cannot work because pattern missing in some input
-            if not pattern_present_in_all_examples(task, kind, c):
-                continue
-            ok=True
-            for x,y in train_pairs:
-                if predict_with_pattern_kind(x.tolist(), kind, c) != y:
-                    ok=False; break
-            if ok:
-                valid_ABS.append((kind, c))
-    programs_G = [f"{cn}" for cn in valid_G]
+    abs_ops: List[Operation] = [OpUniformPatternPredicate()]
+    # Pre-instantiate overlay ops per color for kind=window_nxm with the current default shape
+    for c in colors:
+        if not pattern_present_in_all_examples(task, "window_nxm", c):
+            continue
+        abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=WINDOW_SHAPE_DEFAULT))
+    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_ABS = []
-    for (kind, c) in valid_ABS:
-        extra = ""
-        if kind == "window_nxm":
-            # Include window shape only (centerless windows already carry per-window schema)
-            extra = f", window_shape={WINDOW_SHAPE_DEFAULT}"
+    for _, seq in winners_abs:
+        # First op is the overlay extractor with parameters; second is the predicate
+        ov = None
+        for op in seq:
+            if isinstance(op, OpBrightOverlayIdentity):
+                ov = op
+                break
+        if ov is None:
+            continue
+        shape = ov.window_shape if ov.window_shape is not None else (WINDOW_SHAPE_DEFAULT if ov.kind == "window_nxm" else None)
+        extra = f", window_shape={shape}" if shape is not None else ""
         programs_ABS.append(
-            f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
+            f"PatternOverlayExtractor(kind={ov.kind}, color={ov.color}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
         )
-    return {"G":{"nodes": total_G, "programs": programs_G},
-            "ABS":{"nodes": total_ABS, "programs": programs_ABS}}
+
+    return {"G": {"nodes": total_G, "programs": programs_G},
+            "ABS": {"nodes": total_ABS, "programs": programs_ABS}}
 # Pretty-prints the programs and node counts (README_clean.md §4).
 def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)
