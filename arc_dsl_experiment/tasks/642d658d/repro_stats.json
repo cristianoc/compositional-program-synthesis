@@ -6,9 +6,9 @@
     "tries_to_first": 1
   },
   "G": {
-    "nodes": 4,
-    "programs_found": 0,
-    "time_sec": 0.0,
-    "tries_to_first": null
+    "nodes": 70,
+    "programs_found": 3,
+    "time_sec": 0.06,
+    "tries_to_first": 63
   }
 }

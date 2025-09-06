@@ -7,8 +7,12 @@
       ]
     },
     "G": {
-      "nodes": 4,
-      "programs": []
+      "nodes": 70,
+      "programs": [
+        "compose(choose_cross_implied_33->out_cross_mode_33)",
+        "compose(choose_cross_implied_33->out_flank_mode)",
+        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+      ]
     }
   },
   "3x1": {
@@ -19,8 +23,12 @@
       ]
     },
     "G": {
-      "nodes": 4,
-      "programs": []
+      "nodes": 70,
+      "programs": [
+        "compose(choose_cross_implied_33->out_cross_mode_33)",
+        "compose(choose_cross_implied_33->out_flank_mode)",
+        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+      ]
     }
   },
   "window": {
@@ -31,8 +39,12 @@
       ]
     },
     "G": {
-      "nodes": 4,
-      "programs": []
+      "nodes": 70,
+      "programs": [
+        "compose(choose_cross_implied_33->out_cross_mode_33)",
+        "compose(choose_cross_implied_33->out_flank_mode)",
+        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+      ]
     }
   }
 }
