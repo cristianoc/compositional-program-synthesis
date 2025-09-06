@@ -73,7 +73,11 @@ def main():
         # Print node counts once
         # G nodes are the same across shapes; ABS nodes represent 3 instantiations × 9 colors
         any_shape = next(iter(programs_all.values()))
-        g_nodes = any_shape['G']['nodes']
+        # Derive G nodes directly from DSL to reflect current COLOR_RULES length
+        try:
+            g_nodes = len(dsl.COLOR_RULES)
+        except Exception:
+            g_nodes = any_shape['G']['nodes']
         abs_nodes_single = any_shape['ABS']['nodes']
         abs_nodes_total = abs_nodes_single * 3
         print("=== Node counts ===")
