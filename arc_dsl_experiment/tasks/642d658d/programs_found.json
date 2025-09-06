@@ -5,17 +5,8 @@
       "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(1, 3)) |> UniformPatternPredicate |> OutputAgreedColor",
       "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(3, 1)) |> UniformPatternPredicate |> OutputAgreedColor",
       "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(3, 3)) |> UniformPatternPredicate |> OutputAgreedColor",
-      "match_universal_pos(1,0) |> OpUniformColorFromMatches",
-      "match_universal_pos(1,0) |> OpUniformColorFromMatchesExcludeGlobal",
-      "match_universal_pos(1,1) |> OpUniformColorFromMatches",
-      "match_universal_pos(1,1) |> OpUniformColorFromMatchesExcludeGlobal",
-      "match_universal_pos(1,1) |> OpUniformColorPerSchemaThenMode",
-      "match_universal_pos(1,2) |> OpUniformColorFromMatches",
-      "match_universal_pos(1,2) |> OpUniformColorFromMatchesExcludeGlobal",
-      "match_universal_pos(2,0) |> OpUniformColorPerSchemaThenMode",
-      "match_universal_pos(2,1) |> OpUniformColorFromMatches",
-      "match_universal_pos(2,1) |> OpUniformColorFromMatchesExcludeGlobal",
-      "match_universal_pos(2,2) |> OpUniformColorPerSchemaThenMode"
+      "match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesExcludeGlobal",
+      "match_universal_pos(shape=(3, 3)) |> OpUniformColorPerSchemaThenMode"
     ]
   },
   "G": {

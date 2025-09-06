@@ -773,6 +773,40 @@ class OpMatchFixedSchema(Operation[GridState, MatchesState]):
         return MatchesState(g, matches)
 
 
+class OpMatchAnyUniversalSchemas(Operation[GridState, MatchesState]):
+    input_type = GridState
+    output_type = MatchesState
+
+    def __init__(self, schemas: List[List[List[Union[int, str]]]], label: Optional[str] = None):
+        self.schemas = schemas
+        self.label = label or "match_universal"
+
+    def apply(self, state: GridState) -> MatchesState:
+        g = np.asarray(state.grid, dtype=int)
+        H, W = g.shape
+        matches: List[dict] = []
+        for schema in self.schemas:
+            nr, nc = len(schema), (len(schema[0]) if len(schema) > 0 else 0)
+            if nr == 0 or nc == 0:
+                continue
+            up, down = (nr - 1) // 2, nr // 2
+            left, right = (nc - 1) // 2, nc // 2
+            rmin, rmax = up, H - 1 - down
+            cmin, cmax = left, W - 1 - right
+            for r in range(rmin, rmax + 1):
+                for c in range(cmin, cmax + 1):
+                    y1, x1 = r - up, c - left
+                    y2, x2 = r + down, c + right
+                    win = g[y1:y2 + 1, x1:x2 + 1]
+                    mg = _schema_match_window(schema, win)
+                    if mg is not None:
+                        matches.append({
+                            "y1": int(y1 + 1), "x1": int(x1 + 1), "y2": int(y2 + 1), "x2": int(x2 + 1),
+                            "match": mg, "schema": schema,
+                        })
+        return MatchesState(g, matches)
+
+
 def _iterate_full_windows(g: np.ndarray, window_shape: tuple[int,int]) -> List[np.ndarray]:
     g = np.asarray(g, dtype=int)
     H, W = g.shape
@@ -1546,7 +1580,7 @@ def _enumerate_typed_programs(
     return winners
 # ===================== Enumeration & Printing =====================
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
-def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
+def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11, *, universal_shapes: Optional[List[tuple[int,int]]] = None):
     # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
     # G typed ops (choose -> out)
     winners_g = _enumerate_typed_programs(task, G_TYPED_OPS, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
@@ -1572,8 +1606,10 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         OpUniformPatternPredicate(),
         OpUniformColorFromMatches(),
         OpUniformColorPerSchemaThenMode(),
+        OpUniformColorPerSchemaThenMode(cross_only=False),
         OpUniformColorFromSchemaConstantsOnly(),
         OpUniformColorFromMatchesExcludeGlobal(),
+        OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
     ]
     # Pre-instantiate overlay ops per (shape, color) for kind=window_nxm
     for shape in shapes:
@@ -1582,14 +1618,16 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
                 continue
             abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=shape))
     # Remove colorless overlay pipelines and overlay-based schema filters
-    # Add universal fixed-schema matchers derived from task (train+test) for 3x3 and center_value=4
-    try:
-        uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=(3,3), center_value=4, splits=("train","test"))
-        for (ri,rj), schema in uni_schemas.items():
-            label = f"match_universal_pos({ri},{rj})"
-            abs_ops.append(OpMatchFixedSchema(schema, label=label))
-    except Exception:
-        pass
+    # Add universal fixed-schema matchers derived from task (train+test) for requested shapes and center_value=4
+    shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
+    for ushape in shapes_universal:
+        try:
+            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            if uni_schemas:
+                schemas_list = list(uni_schemas.values())
+                abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
+        except Exception:
+            continue
     # Enumerate up to depth 3 to allow schema-matching chains
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_ABS = []
@@ -1603,7 +1641,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
                 f"PatternOverlayExtractor(kind={ov.kind}, color={ov.color}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
             )
         
-        elif len(seq) == 2 and isinstance(seq[0], OpMatchFixedSchema) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches)):
+        elif len(seq) == 2 and isinstance(seq[0], (OpMatchFixedSchema, OpMatchAnyUniversalSchemas)) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches)):
             m0 = seq[0]
             aggname = seq[1].__class__.__name__
             programs_ABS.append(f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}")
