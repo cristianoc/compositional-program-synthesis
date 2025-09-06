@@ -10,8 +10,7 @@
       "nodes": 70,
       "programs": [
         "compose(choose_cross_implied_33->out_cross_mode_33)",
-        "compose(choose_cross_implied_33->out_flank_mode)",
-        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+        "compose(choose_cross_implied_33->out_flank_mode)"
       ]
     }
   },
@@ -26,8 +25,7 @@
       "nodes": 70,
       "programs": [
         "compose(choose_cross_implied_33->out_cross_mode_33)",
-        "compose(choose_cross_implied_33->out_flank_mode)",
-        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+        "compose(choose_cross_implied_33->out_flank_mode)"
       ]
     }
   },
@@ -42,8 +40,7 @@
       "nodes": 70,
       "programs": [
         "compose(choose_cross_implied_33->out_cross_mode_33)",
-        "compose(choose_cross_implied_33->out_flank_mode)",
-        "compose(choose_first(crossImplied,bestCross)->out_cross_mode_33)"
+        "compose(choose_cross_implied_33->out_flank_mode)"
       ]
     }
   }
