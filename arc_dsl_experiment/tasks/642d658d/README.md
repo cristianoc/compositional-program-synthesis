@@ -26,7 +26,7 @@
 ![](images/overlay_mosaic.png)
 
 ## Abstract
-The `PatternOverlayExtractor` emits overlays for one kind: `window_nxm` (every full `n×m` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` reads evidence from the window’s center neighborhood (odd×odd: cross; even×even: central 2×2; odd×even: 1×2; even×odd: 2×1). Program search enumerates color parameters per window shape.
+The `PatternOverlayExtractor` emits overlays for one kind: `window_nxm` (every full `n×m` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` reads evidence from the window’s center neighborhood (odd×odd: cross; even×even: central 2×2; odd×even: 1×2; even×odd: 2×1). Program search enumerates color parameters per window shape. In addition, universal fixed-schema pipelines are supported: for a chosen shape, we compute intersected universal schemas from train+test and match them everywhere with a single op, then aggregate matched values to predict the color.
 
 ## 1. Methods (pattern-only)
 
@@ -46,7 +46,7 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 - G core: composed color rules only (no pre-ops). Nodes = number of composed rules (currently 70; see repro output).
  - Abstraction: pattern kinds × colors (1–9). Nodes = 3 × 9 = 27.
  - Single-pass enumeration: ABS is enumerated once and includes all three `window_nxm` shape instantiations: `(1,3)`, `(3,1)`, and the default window.
- - Typed composition seeds: the operations that accept `GridState` are the chooser ops for G, the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)`), and universal fixed-schema matchers derived from train+test (e.g., `match_universal_pos(ri,rj)` for 3×3). Aggregators then map matches to a color.
+ - Typed composition seeds: the operations that accept `GridState` are the chooser ops for G, the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)`), and universal fixed-schema matchers derived from train+test (one per shape), labeled as `match_universal_pos(shape=(h,w))`. Each universal matcher tries all positions for that shape (no per-position parameters). Aggregators then map matches to a color.
 
 ## 2.1 Operations and Types
 
@@ -66,13 +66,13 @@ Abstraction (A) ops
 |---|---|---|---|
 | `overlay_window_nxm` | `GridState` | `OverlayContext` | Parameterized by `color ∈ {1..9}` and `window_shape ∈ {(1,3),(3,1),default}`. |
 | `uniform_pattern_predicate` | `OverlayContext` | `ColorState` | Center-neighborhood evidence aggregation by shape parity. |
-| `match_fixed_schema` | `GridState` | `MatchesState` | Matches a precomputed universal schema across the grid (e.g., `match_universal_pos(ri,rj)`). |
+| `match_universal_pos(shape=(h,w))` | `GridState` | `MatchesState` | Matches all intersected universal schemas for the given shape across all positions (single op; no per-position parameters). |
 | `uniform_color_from_matches` | `MatchesState` | `ColorState` | Aggregates non-None, non-zero values from matches and returns mode. Variants include per-schema mode and exclude-global.
 
 These tables reflect the explicit op registries defined in `dsl.py` (`G_TYPED_OPS` and `A_OP_TYPE_SUMMARY`).
 
-Removed functionality
-- The colorless detector `window_nxm_all` and overlay-based schema matching have been removed. Universal schemas are now computed by direct full-window enumeration and logical intersection (train+test), then used via `match_fixed_schema` in the DSL.
+Removed/changed functionality
+- The colorless detector `window_nxm_all` and overlay-based schema matching have been removed. Universal schemas are now computed by direct full-window enumeration and logical intersection (train+test), then used via a single-shape matcher `match_universal_pos(shape=...)` instead of per-position instantiations.
 
 ## 3. Results
 
@@ -118,3 +118,8 @@ Artifacts:
 
 Notes:
 - Code is pattern-only.
+- To include universal schema matchers for additional shapes in enumeration programmatically, call:
+  ```python
+  dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3)])
+  ```
+  By default, `(1,3)`, `(3,1)`, and the current `WINDOW_SHAPE_DEFAULT` are included.
