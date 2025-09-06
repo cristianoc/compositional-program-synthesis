@@ -1,0 +1,38 @@
+{
+  "1x3": {
+    "ABS": {
+      "nodes": 9,
+      "programs": [
+        "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(1, 3)) |> UniformPatternPredicate |> OutputAgreedColor"
+      ]
+    },
+    "G": {
+      "nodes": 4,
+      "programs": []
+    }
+  },
+  "3x1": {
+    "ABS": {
+      "nodes": 9,
+      "programs": [
+        "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(3, 1)) |> UniformPatternPredicate |> OutputAgreedColor"
+      ]
+    },
+    "G": {
+      "nodes": 4,
+      "programs": []
+    }
+  },
+  "window": {
+    "ABS": {
+      "nodes": 9,
+      "programs": [
+        "PatternOverlayExtractor(kind=window_nxm, color=4, window_shape=(3, 3)) |> UniformPatternPredicate |> OutputAgreedColor"
+      ]
+    },
+    "G": {
+      "nodes": 4,
+      "programs": []
+    }
+  }
+}

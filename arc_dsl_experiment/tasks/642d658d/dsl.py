@@ -71,23 +71,14 @@ class Pipeline:
 def detect_overlays(
     grid: Iterable[Iterable[int]],
     *,
-    kind: str = "h3",
+    kind: str = "window_nxm",
     color: int,
     min_repeats: int = 2,
     window_shape: Optional[tuple[int, int]] = None,
 ) -> List[dict]:
-    # Map h3/v3 to window_nxm with degenerate shapes so detection/predicate are unified.
-    eff_kind = kind
-    eff_shape: Optional[tuple[int, int]] = window_shape
-    if kind == "h3":
-        eff_kind = "window_nxm"
-        eff_shape = (1, 3)
-    elif kind == "v3":
-        eff_kind = "window_nxm"
-        eff_shape = (3, 1)
-    elif kind == "window_nxm":
-        eff_shape = window_shape if window_shape is not None else WINDOW_SHAPE_DEFAULT
     # For window_nxm, propagate a configurable window shape (defaults to WINDOW_SHAPE_DEFAULT).
+    eff_kind = kind
+    eff_shape: Optional[tuple[int, int]] = window_shape if window_shape is not None else (WINDOW_SHAPE_DEFAULT if kind == "window_nxm" else None)
     return detect_pattern_overlays(
         grid,
         kind=eff_kind,  # type: ignore[arg-type]
@@ -96,7 +87,7 @@ def detect_overlays(
         window_shape=eff_shape,
     )
 # Pattern kinds considered during search/enumeration
-PATTERN_KINDS: List[str] = ["h3", "v3", "window_nxm"]
+PATTERN_KINDS: List[str] = ["window_nxm"]
 # Default window shape for window_nxm (n×m with n,m≥1). Used across detection and pretty-printing.
 WINDOW_SHAPE_DEFAULT: tuple[int, int] = (3, 3)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
@@ -261,16 +252,10 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
 
     def apply(self, state: GridState) -> OverlayContext:
         g = state.grid
-        # Normalize pattern kind: map h3->window_nxm(1,3), v3->window_nxm(3,1)
+        # Use configured pattern kind and default shape where applicable
         k = self.kind
-        ws: Optional[tuple[int,int]] = None
-        if k == "h3":
-            k = "window_nxm"; ws = (1,3)
-        elif k == "v3":
-            k = "window_nxm"; ws = (3,1)
-        elif k == "window_nxm":
-            ws = WINDOW_SHAPE_DEFAULT
-        # Use the normalized pattern kind and color for overlays
+        ws: Optional[tuple[int,int]] = WINDOW_SHAPE_DEFAULT if k == "window_nxm" else None
+        # Use the pattern kind and color for overlays
         ovs = detect_overlays(g.tolist(), kind=k, color=self.color, window_shape=ws)
         H, W = g.shape
         count = len(ovs)
@@ -290,9 +275,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
     def apply(self, state: OverlayContext) -> ColorState:
         # Predicts a single output color from pattern overlays.
         # Semantics by kind:
-        #  - h3: for each overlay center at selected color, check horizontal flanks (x,c,x);
-        #        collect the flank color x when uniform and nonzero, then return the mode (tie→min).
-        #  - v3: analogous, but on vertical flanks above/below the center.
+        #  - window_nxm: center-neighborhood evidence with special cases for degenerate shapes
         # If no kind-specific evidence is found, returns 0 (no guess).
         g = state.grid
         from collections import Counter
@@ -304,21 +287,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         # Collect evidence depending on kind
         for ov in state.overlays:
             r, c = ov["center_row"] - 1, ov["center_col"] - 1
-            if kind in ("h3", "v3"):
-                if int(g[r, c]) != int(sel_color):
-                    continue
-            if kind == "h3":
-                if c-1>=0 and c+1<g.shape[1]:
-                    a, b = int(g[r, c-1]), int(g[r, c+1])
-                    if a == b and a != 0:
-                        flank_colors.append(a)
-            elif kind == "v3":
-                if r-1>=0 and r+1<g.shape[0]:
-                    a, b = int(g[r-1, c]), int(g[r+1, c])
-                    if a == b and a != 0:
-                        flank_colors.append(a)
-            
-            elif kind == "window_nxm":
+            if kind == "window_nxm":
                 # Previous centerless rule: derive evidence from the window center neighborhood only.
                 # For center region (rows CR, cols CC):
                 #  - odd×odd: 4-way cross around true center

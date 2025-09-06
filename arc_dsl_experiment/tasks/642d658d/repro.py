@@ -40,13 +40,42 @@ def main():
     task = json.loads(Path(TASK_PATH).read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
     # choose best colors per kind on train
-    COLOR_H3 = _best_color_for_kind(task, "h3")
-    COLOR_V3 = _best_color_for_kind(task, "v3")
-    COLOR_Wn = _best_color_for_kind(task, "window_nxm")
+    def _best_color_for_shape(shape):
+        from importlib import reload
+        import dsl as _dsl
+        reload(_dsl)
+        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
+        return _best_color_for_kind(task, "window_nxm")
 
-    # Enumerate and print programs (composed form)
-    # Pretty print programs found in both spaces (README_clean.md §4):
-    res = dsl.print_programs_for_task(task, num_preops=200, seed=11)
+    # Snapshot the base default shape before any overrides
+    BASE_DEFAULT_SHAPE = tuple(dsl.WINDOW_SHAPE_DEFAULT)
+    COLOR_1x3 = _best_color_for_shape((1,3))
+    COLOR_3x1 = _best_color_for_shape((3,1))
+    COLOR_Wn = _best_color_for_shape(BASE_DEFAULT_SHAPE)
+
+    # Enumerate and print programs for three window shapes: 1x3, 3x1, default
+    # Pretty print programs found in each configuration; persist a single combined JSON
+    def run_enumeration_for_shape(shape_name: str, shape: tuple[int,int]):
+        from importlib import reload
+        import dsl as _dsl
+        reload(_dsl)
+        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
+        print(f"\n=== Programs (window_nxm, shape={shape_name}) ===")
+        res = _dsl.print_programs_for_task(task, num_preops=200, seed=11)
+        return shape_name, res
+
+    programs_all = {}
+    for nm, sh in (("1x3", (1,3)), ("3x1", (3,1)), ("window", BASE_DEFAULT_SHAPE)):
+        name, res = run_enumeration_for_shape(nm, sh)  # type: ignore[arg-type]
+        programs_all[name] = res
+    # Write combined summary as well
+    programs_path = HERE / "programs_found.json"
+    try:
+        with open(programs_path, "w", encoding="utf-8") as f:
+            json.dump(programs_all, f, indent=2, sort_keys=True)
+        print("Wrote", programs_path)
+    except Exception as e:
+        print("[warn] failed to write programs_found.json:", e)
 
     # Measure timing and counts (single pass, rounded to reduce noise)
     def measure(task, num_preops=200, seed=11):
@@ -102,14 +131,31 @@ def main():
             res.append(int(yp==y))
         return sum(res), len(res), best_c
 
-    k_v3_ok, k_total, k_v3_c = eval_kind("v3")
-    k_w_ok, _, k_w_c = eval_kind("window_nxm")
-    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n window_nxm: {k_w_ok}/{k_total} (color={k_w_c})")
+    def eval_shape(shape):
+        from importlib import reload
+        import dsl as _dsl
+        reload(_dsl)
+        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
+        res = []
+        for x,y in train_pairs:
+            yp = _dsl.predict_with_pattern_kind(x.tolist(), "window_nxm", COLOR_Wn)
+            res.append(int(yp==y))
+        return sum(res), len(res)
+    k_13_ok, k_total = eval_shape((1,3))
+    k_31_ok, _ = eval_shape((3,1))
+    print(f"\n=== Pattern eval (train acc) ===\n 1x3: {k_13_ok}/{k_total}\n 3x1: {k_31_ok}/{k_total}")
     # Test-set predictions (no GT in ARC test; we just report)
     gtest = np.array(task["test"][0]["input"], dtype=int)
-    pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3", COLOR_V3)
+    from importlib import reload
+    reload(dsl)
+    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', (1,3))
+    pred_13 = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_1x3)
+    reload(dsl)
+    setattr(dsl, 'WINDOW_SHAPE_DEFAULT', (3,1))
+    pred_31 = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_3x1)
+    reload(dsl)
     pred_wn = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxm", COLOR_Wn)
-    print(f"Test predictions: v3={pred_v3} window_nxm={pred_wn}")
+    print(f"Test predictions: 1x3={pred_13} 3x1={pred_31} window_nxm={pred_wn}")
     # Prepare capture for schema output
     schema_lines: list[str] = []
     def sprint(msg: str = ""):
@@ -187,16 +233,16 @@ def main():
     except Exception as e:
         print("[warn] failed to write schema_print.txt:", e)
 
-    # Verify overlay counts for h3_yellow vs count of yellow pixels
+    # Verify overlay counts for 1x3 (same as count of target color centers)
     def count_color(g, color):
         return int((np.array(g)==int(color)).sum())
     for split in ("train","test"):
         exs = task[split]
         for i, ex in enumerate(exs, start=1):
             g = ex["input"]
-            n_c = count_color(g, COLOR_H3)
-            ovs_h3 = dsl.detect_overlays(g, kind="h3", color=COLOR_H3)
-            print(f"{split}[{i}] color={COLOR_H3} count={n_c} overlays_h3={len(ovs_h3)}")
+            n_c = count_color(g, COLOR_1x3)
+            ovs_13 = dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3))
+            print(f"{split}[{i}] color={COLOR_1x3} count={n_c} overlays_1x3={len(ovs_13)}")
     # Emit a tracked artifact with stable ordering
     out_stats = HERE / "repro_stats.json"
     with open(out_stats, "w", encoding="utf-8") as f:
@@ -210,9 +256,9 @@ def main():
             return sorted([[ov["center_row"], ov["center_col"]] for ov in ovs])
         for ex in task["train"]:
             g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn))
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3)))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_3x1, window_shape=(3,1)))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn, window_shape=dsl.WINDOW_SHAPE_DEFAULT))
             details["train"].append({
                 "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
@@ -221,9 +267,9 @@ def main():
             })
         for ex in task["test"]:
             g = ex["input"]
-            centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
-            centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn))
+            centers_h3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_1x3, window_shape=(1,3)))
+            centers_v3 = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_3x1, window_shape=(3,1)))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxm", color=COLOR_Wn, window_shape=dsl.WINDOW_SHAPE_DEFAULT))
             details["test"].append({
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
@@ -369,9 +415,9 @@ def main():
                             img[yy:yy+scale, xx:xx+scale, :] = color
             cx += (3*scale + scale)  # glyph width + 1 space
 
-    def render_grid_with_overlays(g, pred_color, title, out_path, kind="h3", color: int = 1):
+    def render_grid_with_overlays(g, pred_color, title, out_path, kind="window_nxm", color: int = 1):
         g = np.asarray(g, dtype=int)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
+        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color, window_shape=window_shape)
         SCALE = 16
         base = upsample(grid_to_rgb(g), scale=SCALE)
         # draw overlays
@@ -438,9 +484,9 @@ def main():
         return out_path
 
     # Internal: build panel without header (for mosaics)
-    def build_panel_body(g, pred_color, kind="h3", color: int = 1) -> np.ndarray:
+    def build_panel_body(g, pred_color, kind="window_nxm", color: int = 1, window_shape: Optional[tuple[int,int]] = None) -> np.ndarray:
         g = np.asarray(g, dtype=int)
-        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color)
+        overlays = dsl.detect_overlays(g.tolist(), kind=kind, color=color, window_shape=window_shape)
         SCALE = 16
         base = upsample(grid_to_rgb(g), scale=SCALE)
         for ov in sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"])):
@@ -487,25 +533,36 @@ def main():
         return np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
 
     # Build a single mosaic image with all train + test rows and columns for kinds
-    def render_mosaic_all_examples(task, COLOR_H3: int, COLOR_V3: int, COLOR_Wn: int, out_path: str):
+    def render_mosaic_all_examples(task, COLOR_1x3: int, COLOR_3x1: int, COLOR_Wn: int, out_path: str):
         import numpy as np
-        kinds = [("H3", "h3", COLOR_H3), ("V3", "v3", COLOR_V3), ("WINDOW", "window_nxm", COLOR_Wn)]
+        base_shape = tuple(dsl.WINDOW_SHAPE_DEFAULT)
+        kinds: list[tuple[str, tuple[int,int], int]] = [("1x3", (1,3), COLOR_1x3), ("3x1", (3,1), COLOR_3x1), ("WINDOW", base_shape, COLOR_Wn)]
         rows = []
         row_labels = []
         # Collect panels per row (train examples then test)
         for idx, ex in enumerate(task["train"], start=1):
             g = np.array(ex["input"], dtype=int)
             pan = []
-            for _, kind, kc in kinds:
-                pred = dsl.predict_with_pattern_kind(g.tolist(), kind, kc)
-                pan.append(build_panel_body(g, pred, kind=kind, color=kc))
+            for _, shape, kc in kinds:
+                # Set shape for prediction
+                from importlib import reload
+                import dsl as _dsl
+                reload(_dsl)
+                setattr(_dsl, "WINDOW_SHAPE_DEFAULT", shape)
+                pred = _dsl.predict_with_pattern_kind(g.tolist(), "window_nxm", kc)
+                pan.append(build_panel_body(g, pred, kind="window_nxm", color=kc, window_shape=shape))
             rows.append(pan); row_labels.append(f"TRAIN {idx}")
         for idx, ex in enumerate(task["test"], start=1):
             g = np.array(ex["input"], dtype=int)
             pan = []
-            for _, kind, kc in kinds:
-                pred = dsl.predict_with_pattern_kind(g.tolist(), kind, kc)
-                pan.append(build_panel_body(g, pred, kind=kind, color=kc))
+            for _, shape, kc in kinds:
+                # Set shape for prediction
+                from importlib import reload
+                import dsl as _dsl
+                reload(_dsl)
+                setattr(_dsl, "WINDOW_SHAPE_DEFAULT", shape)
+                pred = _dsl.predict_with_pattern_kind(g.tolist(), "window_nxm", kc)
+                pan.append(build_panel_body(g, pred, kind="window_nxm", color=kc, window_shape=shape))
             rows.append(pan); row_labels.append(f"TEST {idx}")
 
         # Equalize panel widths per column
@@ -596,13 +653,13 @@ def main():
 
     # Composite mosaic (all train + test in one image for all kinds)
     try:
-        render_mosaic_all_examples(task, COLOR_H3, COLOR_V3, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
+        render_mosaic_all_examples(task, COLOR_1x3, COLOR_3x1, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
         print("Wrote", images_dir / "overlay_mosaic.png")
     except Exception as e:
         print("[warn] failed to render mosaic:", e)
     # Composite mosaic (all train + test in one image for all kinds)
     try:
-        render_mosaic_all_examples(task, COLOR_H3, COLOR_V3, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
+        render_mosaic_all_examples(task, COLOR_1x3, COLOR_3x1, COLOR_Wn, str(images_dir / "overlay_mosaic.png"))
         print("Wrote", images_dir / "overlay_mosaic.png")
     except Exception as e:
         print("[warn] failed to render mosaic:", e)
