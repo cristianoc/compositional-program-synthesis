@@ -26,19 +26,15 @@
 ![](images/overlay_mosaic.png)
 
 ## Abstract
-The `PatternOverlayExtractor` emits overlays for three kinds: `h3` (horizontal `[X, c, X]` with center color `c`), `v3` (vertical `[X, c, X]`), and `window_nxm` (every full `n×m` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` then reads evidence consistent with the selected pattern to output a single color. For `h3`/`v3`, evidence is the nonzero flank color agreed at each center. For `window_nxm`, evidence comes from uniform, nonzero center neighborhoods inside each window (odd×odd: cross; even×even: central 2×2; odd×even: 1×2; even×odd: 2×1). Program search enumerates pattern kinds × colors.
+The `PatternOverlayExtractor` emits overlays for one kind: `window_nxm` (every full `n×m` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` reads evidence from the window’s center neighborhood (odd×odd: cross; even×even: central 2×2; odd×even: 1×2; even×odd: 2×1). Program search enumerates color parameters per window shape.
 
 ## 1. Methods (pattern-only)
 
 - `PatternOverlayExtractor(kind=..., color=c)` with kinds and detection rules:
-  - `h3` (horizontal `[X, c, X]`): emits one overlay per row position whose 3-length window satisfies the generic schema `[X, c, X]` with a nonzero flank color. Detection uses `pattern_mining.gen_schemas_for_triple` to confirm the pattern.
-  - `v3` (vertical `[X, c, X]`): analogous on columns.
   - `window_nxm` (centerless `n×m` windows): emits one overlay per full `n×m` window on the grid. Each overlay includes the raw window and a per-window equality schema.
 
 - `UniformPatternPredicate` (kind-aware evidence → final color):
-  - `h3`: At each overlay center, if left and right flanks exist and are equal and nonzero, collect that flank color. Return the mode across centers (tie → min). If no such evidence, falls back to the most frequent valid cross color around overlay centers.
-  - `v3`: Same using above/below flanks.
-  - `window_nxm`: For each window, if the center neighborhood is uniform and non-zero, collect that color (odd `n`: four-cross; even `n`: central 2×2). Final prediction is the mode (tie → min). No center color is required.
+  - `window_nxm`: For each window, if the center neighborhood is uniform and non-zero, collect that color (odd×odd: cross; even×even: 2×2; odd×even: 1×2; even×odd: 2×1). Final prediction is the mode (tie → min). Degenerate shapes 1×3 and 3×1 behave like horizontal/vertical flank checks.
 
 - Program schema (abstraction space):
 ```
@@ -53,9 +49,9 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 ## 3. Results
 
 - Programs found (abstraction):
-  - `PatternOverlayExtractor(kind=h3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=v3, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
-  - `PatternOverlayExtractor(kind=window_nxm, color=c) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=window_nxm, color=c, window_shape=(1,3)) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=window_nxm, color=c, window_shape=(3,1)) |> UniformPatternPredicate |> OutputAgreedColor`
+  - `PatternOverlayExtractor(kind=window_nxm, color=c, window_shape=(n,m)) |> UniformPatternPredicate |> OutputAgreedColor`
 
 - Node counts (this run):
   - G core: 4
@@ -63,9 +59,9 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 
 ## Code layout
 
-- `overlay_patterns.py`: overlay detector implementing kinds `h3`, `v3`, `window_nxm` (supports `window_shape`; emits full windows with per-window schema).
-- `pattern_mining.py`: generic 1×3 schema miner used by `h3` and `v3` detection.
-- `dsl.py`: pipeline wiring, enumeration/printing of programs, and kind-aware predicate for `h3`, `v3`, and `window_nxm`.
+- `overlay_patterns.py`: overlay detector implementing `window_nxm` (supports `window_shape`; emits full windows with per-window schema).
+- `pattern_mining.py`: generic 1×3 schema miner (used for exploratory analysis; not required for window_nxm detection).
+- `dsl.py`: pipeline wiring, enumeration/printing of programs, and predicate for `window_nxm`.
 
 ## 4. Window size semantics (`window_nxm`)
 
