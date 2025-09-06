@@ -33,7 +33,8 @@ def main():
     # Enumerate once: both G and ABS (ABS includes all three universal shapes)
     from importlib import reload
     reload(dsl)
-    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=[(1,3),(3,1),(3,3)])
+    SHAPES = [(1,3),(3,1),(3,3)]
+    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
     try:
@@ -80,7 +81,7 @@ def main():
     # Print intersected universal schemas per shape (train+test)
     try:
         sprint("\n=== Intersected universal schemas (train+test) ===")
-        for ushape in [(1,3),(3,1),(3,3)]:
+        for ushape in SHAPES:
             uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
             if not uni:
                 sprint(f"shape {ushape}: none")
@@ -327,7 +328,7 @@ def main():
 
         def render_mosaic_universal_all_examples(task, out_path: str):
             # Prepare schemas per shape once
-            shapes = [(1,3),(3,1),(3,3)]
+            shapes = SHAPES
             schemas_per_shape: dict[tuple[int,int], list[list[list[object]]]] = {}
             for ushape in shapes:
                 uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
