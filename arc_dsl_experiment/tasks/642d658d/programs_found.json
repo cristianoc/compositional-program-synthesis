@@ -7,13 +7,17 @@
       "match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesExcludeGlobal",
       "match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesUniformNeighborhood",
       "match_universal_pos(shape=(3, 3)) |> OpUniformColorPerSchemaThenMode"
-    ]
+    ],
+    "programs_found": 5,
+    "time_sec": 0.13295858300989494
   },
   "G": {
     "nodes": 70,
     "programs": [
       "compose(choose_cross_implied_33->out_cross_mode_33)",
       "compose(choose_cross_implied_33->out_flank_mode)"
-    ]
+    ],
+    "programs_found": 2,
+    "time_sec": 0.006933624972589314
   }
 }

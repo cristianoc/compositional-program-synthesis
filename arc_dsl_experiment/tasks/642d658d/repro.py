@@ -71,8 +71,12 @@ def main():
         # Use DSL's unified measurement which runs composition search for both G and ABS
         return dsl.measure_spaces(task, seed=seed)
 
-    stats = measure(task, seed=11)
-    print("\n=== STATS ===")
+    # Use single-pass stats from enumeration result
+    stats = {
+        "G": {"nodes": len(dsl.COLOR_RULES), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
+        "ABS": {"nodes": res_once['ABS']['nodes'], "programs_found": len(res_once['ABS']['programs']), "time_sec": res_once['ABS'].get('time_sec')},
+    }
+    print("\n=== STATS (single-pass) ===")
     print(stats)
     # Removed overlay-based evaluation and predictions
     # Prepare capture for schema output

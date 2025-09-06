@@ -1345,9 +1345,12 @@ def _enumerate_typed_programs(
 # ===================== Enumeration & Printing =====================
 # Enumerates programs that are correct on ALL training examples (README_clean.md §3–§4).
 def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11, *, universal_shapes: Optional[List[tuple[int,int]]] = None):
+    import time
     # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
     # G typed ops (choose -> out)
+    t0 = time.perf_counter()
     winners_g = _enumerate_typed_programs(task, G_TYPED_OPS, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
+    t1 = time.perf_counter()
     programs_G = []
     for name, _ in winners_g:
         # Present in legacy style for G composed programs
@@ -1388,7 +1391,9 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     # Node count heuristic: number of matcher seeds
     total_ABS = matcher_seeds
     # Enumerate up to depth 3 to allow schema-matching chains
+    t2 = time.perf_counter()
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
+    t3 = time.perf_counter()
     programs_ABS = []
     for name, seq in winners_abs:
         # Pretty-print sequences in a readable, parameterized style
@@ -1400,8 +1405,8 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             # Fallback: use labels
             programs_ABS.append(name)
 
-    return {"G": {"nodes": total_G, "programs": programs_G},
-            "ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS))}}
+    return {"G": {"nodes": total_G, "programs": programs_G, "programs_found": len(programs_G), "time_sec": (t1 - t0)},
+            "ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t3 - t2)}}
 # Pretty-prints the programs and node counts (README_clean.md §4).
 def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)
