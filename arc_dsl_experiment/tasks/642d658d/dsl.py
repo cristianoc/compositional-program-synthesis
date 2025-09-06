@@ -418,7 +418,7 @@ def bright_overlay_cross_mode(g: np.ndarray, overlays: List[dict]) -> int:
     cands = [k for k,v in cnt.items() if v==m]
     return int(min(cands))
 # Composed program body used in abstraction space: PatternOverlayExtractor |> UniformPatternPredicate |> OutputAgreedColor.
-def predict_bright_overlay_uniform_cross(grid: List[List[int]], color: int) -> int:
+def predict_window_nxm_uniform_color(grid: List[List[int]], color: int) -> int:
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
     pipeline = Pipeline([
