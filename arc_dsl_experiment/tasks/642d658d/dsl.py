@@ -76,8 +76,8 @@ def detect_overlays(
     min_repeats: int = 2,
     window_size: Optional[int] = None,
 ) -> List[dict]:
-    # For schema_nxn, propagate a configurable window size (defaults to WINDOW_SIZE_DEFAULT).
-    ws = int(window_size) if window_size is not None else (WINDOW_SIZE_DEFAULT if kind == "schema_nxn" else None)
+    # For window_nxn, propagate a configurable window size (defaults to WINDOW_SIZE_DEFAULT).
+    ws = int(window_size) if window_size is not None else (WINDOW_SIZE_DEFAULT if kind == "window_nxn" else None)
     return detect_pattern_overlays(
         grid,
         kind=kind,  # type: ignore[arg-type]
@@ -86,8 +86,8 @@ def detect_overlays(
         window_size=ws,
     )
 # Pattern kinds considered during search/enumeration
-PATTERN_KINDS: List[str] = ["h3", "v3", "schema_nxn"]
-# Default window size for schema_nxn (n×n with odd n≥1). Used across detection and pretty-printing.
+PATTERN_KINDS: List[str] = ["h3", "v3", "window_nxn"]
+# Default window size for window_nxn (n×n with n≥1). Used across detection and pretty-printing.
 WINDOW_SIZE_DEFAULT: int = 3
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
@@ -100,57 +100,67 @@ def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
             if len(ovs) == 0:
                 return False
     return True
-def _gather_schema_windows(task: Dict, color: int, *, window_size: int) -> List[np.ndarray]:
+
+# ---------------------- Combined schema for window_nxn ----------------------
+def _gather_full_windows_for_grid(g: np.ndarray, color: int, *, window_size: int) -> List[np.ndarray]:
+    """Collect all full n×n windows centered on pixels equal to color.
+
+    Only returns windows fully inside the grid (no clipping)."""
+    wins: List[np.ndarray] = []
+    H, W = g.shape
+    n = int(window_size)
+    if n < 1:
+        return wins
+    up_left = (n - 1) // 2
+    down_right = n // 2
+    rmin, rmax = up_left, H - 1 - down_right
+    cmin, cmax = up_left, W - 1 - down_right
+    if rmin > rmax or cmin > cmax:
+        return wins
+    for r in range(rmin, rmax + 1):
+        for c in range(cmin, cmax + 1):
+            if int(g[r, c]) != int(color):
+                continue
+            wins.append(g[r-up_left:r+down_right+1, c-up_left:c+down_right+1].copy())
+    return wins
+
+def _gather_full_windows_for_task(task: Dict, color: int, *, window_size: int) -> List[np.ndarray]:
+    wins: List[np.ndarray] = []
     import numpy as np
-    windows = []
-    if window_size < 1:
-        raise ValueError("window_size must be >= 1")
-    up_left = (window_size - 1) // 2
-    down_right = window_size // 2
-    def collect_from_grid(g):
-        g = np.asarray(g, dtype=int)
-        H, W = g.shape
-        # Only collect full windows completely inside the grid
-        r_min = up_left
-        r_max = H - 1 - down_right
-        c_min = up_left
-        c_max = W - 1 - down_right
-        if r_min > r_max or c_min > c_max:
-            return
-        for r in range(r_min, r_max + 1):
-            for c in range(c_min, c_max + 1):
-                if int(g[r, c]) == int(color):
-                    windows.append(g[r-up_left:r+down_right+1, c-up_left:c+down_right+1].copy())
     for split in ("train","test"):
         for ex in task.get(split, []):
-            collect_from_grid(ex["input"])
-    return windows
-def _schema_nxn_string_for_task(task: Dict, color: int, *, window_size: int) -> str:
-    wins = _gather_schema_windows(task, color, window_size=window_size)
+            g = np.asarray(ex["input"], dtype=int)
+            wins.extend(_gather_full_windows_for_grid(g, color, window_size=window_size))
+    return wins
+
+def combined_window_nxn_schema(task: Dict, color: int, *, window_size: int) -> List[List[Union[int, str]]]:
+    """Return the consensus schema matrix across all full windows for the given color and n."""
+    wins = _gather_full_windows_for_task(task, color, window_size=window_size)
+    n = window_size
     if not wins:
-        return "[]"
-    # consensus with wildcard and variable-aware equalities across ALL examples
+        return [["*"] * n for _ in range(n)]
     # Determine constants per position across windows
     pos_vals: List[set[int]] = []
-    for i in range(window_size):
-        for j in range(window_size):
+    for i in range(n):
+        for j in range(n):
             vals = {int(win[i, j]) for win in wins}
             pos_vals.append(vals)
     is_const = [len(s) == 1 for s in pos_vals]
     const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
-    # Equality graph among non-constants
-    npos = window_size * window_size
+
+    # Equality relation among non-constant positions: equal across all windows
+    npos = n * n
     adj = [[False] * npos for _ in range(npos)]
     for a in range(npos):
         adj[a][a] = True
     for a in range(npos):
         if is_const[a]:
             continue
-        ai, aj = divmod(a, window_size)
+        ai, aj = divmod(a, n)
         for b in range(a + 1, npos):
             if is_const[b]:
                 continue
-            bi, bj = divmod(b, window_size)
+            bi, bj = divmod(b, n)
             equal_all = True
             for win in wins:
                 if int(win[ai, aj]) != int(win[bi, bj]):
@@ -158,9 +168,10 @@ def _schema_nxn_string_for_task(task: Dict, color: int, *, window_size: int) -> 
                     break
             if equal_all:
                 adj[a][b] = adj[b][a] = True
-    # Connected components of equal positions
+
+    # Connected components of equal positions (size >= 2 → variable group)
     visited = [False] * npos
-    components: List[List[int]] = []
+    comps: List[List[int]] = []
     for v in range(npos):
         if visited[v] or is_const[v]:
             continue
@@ -175,22 +186,26 @@ def _schema_nxn_string_for_task(task: Dict, color: int, *, window_size: int) -> 
                     stack.append(w)
                     comp.append(w)
         if len(comp) >= 2:
-            components.append(sorted(comp))
-    # Build schema grid with constants, variables, and '*'
-    schema: List[List[Union[int, str]]] = [["*" for _ in range(window_size)] for _ in range(window_size)]
+            comps.append(sorted(comp))
+
+    # Assemble schema grid
+    schema: List[List[Union[int, str]]] = [["*" for _ in range(n)] for _ in range(n)]
     for p in range(npos):
         if is_const[p]:
-            i, j = divmod(p, window_size)
-            cv_opt = const_val[p]
-            schema[i][j] = int(cv_opt) if cv_opt is not None else "*"
+            i, j = divmod(p, n)
+            schema[i][j] = int(const_val[p]) if const_val[p] is not None else "*"
     var_tokens = ("X", "Y", "Z", "U", "V", "W")
     next_var = 0
-    for comp in components:
+    for comp in comps:
         tok = var_tokens[min(next_var, len(var_tokens) - 1)]
         next_var += 1
         for p in comp:
-            i, j = divmod(p, window_size)
+            i, j = divmod(p, n)
             schema[i][j] = tok
+    return schema
+
+def combined_window_nxn_schema_string(task: Dict, color: int, *, window_size: int) -> str:
+    schema = combined_window_nxn_schema(task, color, window_size=window_size)
     return "[" + ", ".join("[" + ", ".join(str(x) for x in row) + "]" for row in schema) + "]"
 # ===================== Abstraction & Predicates =====================
 def _cross_vals(g: np.ndarray, r1: int, c1: int) -> List[int]:
@@ -225,7 +240,7 @@ class OpBrightOverlayIdentity(Operation[GridState, OverlayContext]):
     input_type = GridState
     output_type = OverlayContext
 
-    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "schema_nxn", color: Optional[int] = None):
+    def __init__(self, absx: Optional[PatternOverlayExtractor] = None, kind: str = "window_nxn", color: Optional[int] = None):
         self.absx = absx or PatternOverlayExtractor()
         self.kind = kind
         if color is None:
@@ -257,8 +272,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         #  - h3: for each overlay center at selected color, check horizontal flanks (x,c,x);
         #        collect the flank color x when uniform and nonzero, then return the mode (tie→min).
         #  - v3: analogous, but on vertical flanks above/below the center.
-        #  - schema_nxn: fallback to uniform cross color around overlay centers.
-        # If no kind-specific evidence is found, falls back to the most frequent valid cross color at centers.
+        # If no kind-specific evidence is found, returns 0 (no guess).
         g = state.grid
         from collections import Counter
         flank_colors: List[int] = []
@@ -269,8 +283,9 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
         # Collect evidence depending on kind
         for ov in state.overlays:
             r, c = ov["center_row"] - 1, ov["center_col"] - 1
-            if int(g[r, c]) != int(sel_color):
-                continue
+            if kind in ("h3", "v3"):
+                if int(g[r, c]) != int(sel_color):
+                    continue
             if kind == "h3":
                 if c-1>=0 and c+1<g.shape[1]:
                     a, b = int(g[r, c-1]), int(g[r, c+1])
@@ -281,58 +296,80 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
                     a, b = int(g[r-1, c]), int(g[r+1, c])
                     if a == b and a != 0:
                         flank_colors.append(a)
-            elif kind == "schema_nxn":
-                # Use the mined n×n pattern (equality among positions) rather than unconditional cross.
-                n = WINDOW_SIZE_DEFAULT
-                # Only consider if full window exists
-                up_left = (n - 1) // 2
-                down_right = n // 2
-                if r - up_left < 0 or r + down_right >= g.shape[0]:
+            
+            elif kind == "window_nxn":
+                # Previous centerless rule: derive evidence from the window center neighborhood only.
+                # Odd n_eff: 4-way cross around the true center; Even n_eff: central 2x2 block.
+                win = ov.get("window")
+                if win is None:
+                    y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                    win_arr = g[y1:y2+1, x1:x2+1].copy()
+                    win = win_arr.astype(int).tolist()
+                n_eff = int(len(win)) if hasattr(win, "__len__") else 0
+                if n_eff <= 1:
                     continue
-                if c - up_left < 0 or c + down_right >= g.shape[1]:
+                if any(len(row) != n_eff for row in win):
                     continue
-                # Determine if schema implies equality across the cross positions across ALL overlays with full windows on this grid.
-                # First pass: build windows for this grid (full only)
-                wins = []
-                for ov2 in state.overlays:
-                    rr, cc = ov2["center_row"] - 1, ov2["center_col"] - 1
-                    if int(g[rr, cc]) != int(sel_color):
+                if n_eff % 2 == 1:
+                    ci = cj = n_eff // 2
+                    if ci-1 < 0 or ci+1 >= n_eff or cj-1 < 0 or cj+1 >= n_eff:
                         continue
-                    if rr - up_left < 0 or rr + down_right >= g.shape[0]:
-                        continue
-                    if cc - up_left < 0 or cc + down_right >= g.shape[1]:
-                        continue
-                    wins.append(g[rr-up_left:rr+down_right+1, cc-up_left:cc+down_right+1].copy())
-                if not wins:
-                    continue
-                def pos_index(i: int, j: int) -> int:
-                    return i * n + j
-                # cross positions relative to window
-                ci, cj = up_left, up_left  # center within window
-                up = pos_index(ci-1, cj)
-                down = pos_index(ci+1, cj)
-                left = pos_index(ci, cj-1)
-                right = pos_index(ci, cj+1)
-                group = [up, down, left, right]
-                # Check equality across all windows for all pairs in group
-                def equal_all_positions(a: int, b: int) -> bool:
-                    ai, aj = divmod(a, n); bi, bj = divmod(b, n)
-                    for win in wins:
-                        if int(win[ai, aj]) != int(win[bi, bj]):
-                            return False
-                    return True
-                implied_equal = all(equal_all_positions(group[0], p) for p in group[1:])
-                if not implied_equal:
-                    continue
-                # If implied by schema, read this instance's cross value and record when nonzero and equal
-                vals = _cross_vals(g, r+1, c+1)
-                if len(vals)==4 and len(set(vals))==1 and vals[0]!=0:
-                    flank_colors.append(int(vals[0]))
+                    vals = [int(win[ci-1][cj]), int(win[ci+1][cj]), int(win[ci][cj-1]), int(win[ci][cj+1])]
+                    if len(set(vals)) == 1 and vals[0] != 0:
+                        flank_colors.append(int(vals[0]))
+                else:
+                    i0 = n_eff // 2 - 1; i1 = n_eff // 2
+                    j0 = n_eff // 2 - 1; j1 = n_eff // 2
+                    vals = [int(win[i0][j0]), int(win[i0][j1]), int(win[i1][j0]), int(win[i1][j1])]
+                    if len(set(vals)) == 1 and vals[0] != 0:
+                        flank_colors.append(int(vals[0]))
         if flank_colors:
             cnt = Counter(flank_colors); top = max(cnt.values())
             cands = [k for k,v in cnt.items() if v==top]
             return ColorState(int(min(cands)))
         # No evidence from required pattern; return 0 (no fallback to cross-only)
+        return ColorState(0)
+
+# Saved for later: schema-driven predicate variant for window_nxn.
+class OpSchemaDrivenPatternPredicate(Operation[OverlayContext, ColorState]):
+    input_type = OverlayContext
+    output_type = ColorState
+
+    def apply(self, state: OverlayContext) -> ColorState:
+        g = state.grid
+        from collections import Counter, defaultdict
+        flank_colors: List[int] = []
+        kind = getattr(state, "kind", None)
+        if kind != "window_nxn":
+            return ColorState(0)
+        for ov in state.overlays:
+            win = ov.get("window")
+            if win is None:
+                y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                win_arr = g[y1:y2+1, x1:x2+1].copy()
+                win = win_arr.astype(int).tolist()
+            schema = ov.get("schema")
+            if schema is None:
+                continue
+            nr = len(schema); nc = len(schema[0]) if nr>0 else 0
+            if nr==0 or any(len(row)!=nc for row in schema):
+                continue
+            if len(win)!=nr or any(len(row)!=nc for row in win):
+                continue
+            groups: dict[str, list[tuple[int,int]]] = defaultdict(list)
+            for i in range(nr):
+                for j in range(nc):
+                    tok = schema[i][j]
+                    if isinstance(tok, str) and tok != '*':
+                        groups[tok].append((i,j))
+            for coords in groups.values():
+                vals = [int(win[i][j]) for (i,j) in coords]
+                if vals and len(set(vals))==1 and vals[0]!=0:
+                    flank_colors.append(int(vals[0]))
+        if flank_colors:
+            cnt = Counter(flank_colors); top = max(cnt.values())
+            cands = [k for k,v in cnt.items() if v==top]
+            return ColorState(int(min(cands)))
         return ColorState(0)
 def read_overlay_cross_colors(g: np.ndarray, overlays: List[dict]) -> List[Optional[int]]:
     out: List[Optional[int]] = []
@@ -367,7 +404,7 @@ def predict_bright_overlay_uniform_cross(grid: List[List[int]], color: int) -> i
     # Typed pipeline: Grid -> OverlayContext -> Color
     gstate = GridState(np.asarray(grid, dtype=int))
     pipeline = Pipeline([
-        OpBrightOverlayIdentity(kind="schema_nxn", color=color),
+        OpBrightOverlayIdentity(kind="window_nxn", color=color),
         OpUniformPatternPredicate(),
     ])
     out = pipeline.run(gstate)
@@ -494,10 +531,9 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         extra = ""
         if kind in ("h3", "v3"):
             extra = f", pattern=[X, {int(c)}, X]"
-        elif kind == "schema_nxn":
-            # Include the mined variable-aware schema pattern and the current window size
-            sig = _schema_nxn_string_for_task(task, c, window_size=WINDOW_SIZE_DEFAULT)
-            extra = f", pattern={sig}, window_size={WINDOW_SIZE_DEFAULT}"
+        elif kind == "window_nxn":
+            # Include window size only (centerless windows already carry per-window schema)
+            extra = f", window_size={WINDOW_SIZE_DEFAULT}"
         programs_ABS.append(
             f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
         )

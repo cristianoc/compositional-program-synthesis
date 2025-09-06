@@ -42,7 +42,7 @@ def main():
     # choose best colors per kind on train
     COLOR_H3 = _best_color_for_kind(task, "h3")
     COLOR_V3 = _best_color_for_kind(task, "v3")
-    COLOR_CROSSn = _best_color_for_kind(task, "schema_nxn")
+    COLOR_Wn = _best_color_for_kind(task, "window_nxn")
 
     # Enumerate and print programs (composed form)
     # Pretty print programs found in both spaces (README_clean.md §4):
@@ -77,7 +77,7 @@ def main():
             tried2 += 1
             ok=True
             for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_CROSSn)
+                y_pred = dsl.predict_bright_overlay_uniform_cross(pre_f(x), COLOR_Wn)
                 if y_pred != y:
                     ok=False; break
             if ok:
@@ -93,7 +93,7 @@ def main():
     stats = measure(task, num_preops=200, seed=11)
     print("\n=== STATS (200 preops) ===")
     print(stats)
-    # Quick evaluation of other pattern kinds (v3, schema_nxn) on train
+    # Quick evaluation of other pattern kinds (v3, window_nxn) on train
     def eval_kind(kind: str):
         best_c = _best_color_for_kind(task, kind)
         res = []
@@ -103,13 +103,85 @@ def main():
         return sum(res), len(res), best_c
 
     k_v3_ok, k_total, k_v3_c = eval_kind("v3")
-    k_cross_ok, _, k_cross_c = eval_kind("schema_nxn")
-    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n schema_nxn: {k_cross_ok}/{k_total} (color={k_cross_c})")
+    k_w_ok, _, k_w_c = eval_kind("window_nxn")
+    print(f"\n=== Pattern kind eval (train acc) ===\n v3: {k_v3_ok}/{k_total} (color={k_v3_c})\n window_nxn: {k_w_ok}/{k_total} (color={k_w_c})")
     # Test-set predictions (no GT in ARC test; we just report)
     gtest = np.array(task["test"][0]["input"], dtype=int)
     pred_v3 = dsl.predict_with_pattern_kind(gtest.tolist(), "v3", COLOR_V3)
-    pred_cross3 = dsl.predict_with_pattern_kind(gtest.tolist(), "schema_nxn", COLOR_CROSSn)
-    print(f"Test predictions: v3={pred_v3} schema_nxn={pred_cross3}")
+    pred_wn = dsl.predict_with_pattern_kind(gtest.tolist(), "window_nxn", COLOR_Wn)
+    print(f"Test predictions: v3={pred_v3} window_nxn={pred_wn}")
+    # Prepare capture for schema output
+    schema_lines: list[str] = []
+    def sprint(msg: str = ""):
+        print(msg)
+        schema_lines.append(msg)
+
+    # Print a few window_nxn schemas for inspection (all train examples)
+    try:
+        sprint("\n=== Sample window_nxn schemas (train) ===")
+        def _print_schema_aligned(schema):
+            # Determine max cell width across schema for alignment
+            cells = [str(x) for row in schema for x in row]
+            w = max((len(c) for c in cells), default=1)
+            for row in schema:
+                line = "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]"
+                sprint(" " + line)
+        for idx, ex in enumerate(task["train"], start=1):
+            g_ex = np.array(ex["input"], dtype=int)
+            ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxn", color=COLOR_Wn)
+            sprint(f"-- train[{idx}] overlays={len(ovs_ex)} --")
+            for ov in ovs_ex[:min(4, len(ovs_ex))]:
+                oid = int(ov["overlay_id"])
+                cr, cc = int(ov["center_row"]), int(ov["center_col"])
+                n = ov.get("window_size")
+                sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) n {int(n)}")
+                schema = ov.get("schema", [])
+                _print_schema_aligned(schema)
+                sprint()
+    except Exception as e:
+        sprint(f"[warn] failed to print schemas: {e}")
+    # Print a few window_nxn schemas for test examples as well
+    try:
+        sprint("\n=== Sample window_nxn schemas (test) ===")
+        for idx, ex in enumerate(task["test"], start=1):
+            g_ex = np.array(ex["input"], dtype=int)
+            ovs_ex = dsl.detect_overlays(g_ex.tolist(), kind="window_nxn", color=COLOR_Wn)
+            sprint(f"-- test[{idx}] overlays={len(ovs_ex)} --")
+            for ov in ovs_ex[:min(4, len(ovs_ex))]:
+                oid = int(ov["overlay_id"])
+                cr, cc = int(ov["center_row"]), int(ov["center_col"])
+                n = ov.get("window_size")
+                sprint(f"overlay_id {oid:<2} center ({cr:>2}, {cc:>2}) n {int(n)}")
+                schema = ov.get("schema", [])
+                # reuse the train printer
+                cells = [str(x) for row in schema for x in row]
+                w = max((len(c) for c in cells), default=1)
+                for row in schema:
+                    sprint(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
+                sprint()
+    except Exception as e:
+        sprint(f"[warn] failed to print test schemas: {e}")
+    # Print combined schema across full windows (aligned)
+    try:
+        sprint("\n=== Combined schema (window_nxn) ===")
+        comb = dsl.combined_window_nxn_schema(task, COLOR_Wn, window_size=dsl.WINDOW_SIZE_DEFAULT)
+        # align
+        cells = [str(x) for row in comb for x in row]
+        w = max((len(c) for c in cells), default=1)
+        for row in comb:
+            sprint(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
+        # add a blank line after combined schema
+        sprint()
+    except Exception as e:
+        sprint(f"[warn] failed to print combined schema: {e}")
+
+    # Save captured schema output to file
+    out_path = HERE / "schema_print.txt"
+    try:
+        out_path.write_text("\n".join(schema_lines) + "\n", encoding="utf-8")
+        print("Saved schema print to", out_path)
+    except Exception as e:
+        print("[warn] failed to write schema_print.txt:", e)
 
     # Verify overlay counts for h3_yellow vs count of yellow pixels
     def count_color(g, color):
@@ -136,7 +208,7 @@ def main():
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSSn))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxn", color=COLOR_Wn))
             details["train"].append({
                 "target_color": ex["output"][0][0],
                 "centers_h3": centers_h3,
@@ -147,7 +219,7 @@ def main():
             g = ex["input"]
             centers_h3 = centers_of(dsl.detect_overlays(g, kind="h3", color=COLOR_H3))
             centers_v3 = centers_of(dsl.detect_overlays(g, kind="v3", color=COLOR_V3))
-            centers_crossn = centers_of(dsl.detect_overlays(g, kind="schema_nxn", color=COLOR_CROSSn))
+            centers_crossn = centers_of(dsl.detect_overlays(g, kind="window_nxn", color=COLOR_Wn))
             details["test"].append({
                 "centers_h3": centers_h3,
                 "centers_v3": centers_v3,
@@ -229,7 +301,7 @@ def main():
 
     for i, ex in enumerate(task["train"], start=1):
         g = np.array(ex["input"], dtype=int)
-        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_CROSSn)
+        pred = dsl.predict_bright_overlay_uniform_cross(g.tolist(), COLOR_Wn)
         render_grid_with_overlays(
             g,
             pred,
@@ -247,17 +319,17 @@ def main():
         render_grid_with_overlays(
             g,
             pred,
-            f"Train {i}: schema_nxn (color={COLOR_CROSSn}) (GT={int(ex['output'][0][0])})",
+            f"Train {i}: window_nxn (color={COLOR_Wn}) (GT={int(ex['output'][0][0])})",
             str(images_dir / f"overlay_train_{i}_x.png"),
-            kind="schema_nxn", color=COLOR_CROSSn,
+            kind="window_nxn", color=COLOR_Wn,
         )
 
     # Test pic
     gtest = np.array(task["test"][0]["input"], dtype=int)
-    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_CROSSn)
+    predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_Wn)
     render_grid_with_overlays(gtest, predt, f"Test: h3 (color={COLOR_H3})", str(images_dir / "overlay_test.png"), kind="h3", color=COLOR_H3)
     render_grid_with_overlays(gtest, predt, f"Test: v3 (color={COLOR_V3})", str(images_dir / "overlay_test_v.png"), kind="v3", color=COLOR_V3)
-    render_grid_with_overlays(gtest, predt, f"Test: schema_nxn (color={COLOR_CROSSn})", str(images_dir / "overlay_test_x.png"), kind="schema_nxn", color=COLOR_CROSSn)
+    render_grid_with_overlays(gtest, predt, f"Test: window_nxn (color={COLOR_Wn})", str(images_dir / "overlay_test_x.png"), kind="window_nxn", color=COLOR_Wn)
 
 if __name__ == "__main__":
     main()
