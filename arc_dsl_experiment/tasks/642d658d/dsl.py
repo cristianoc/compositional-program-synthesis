@@ -305,7 +305,7 @@ class OpUniformPatternPredicate(Operation[OverlayContext, ColorState]):
                 w_eff = int(len(win[0])) if h_eff>0 else 0
                 if any(len(row) != w_eff for row in win):
                     continue
-                # Temporary special-cases to mirror h3/v3 semantics for degenerate shapes
+                # Temporary special-cases to mirror 1×3 (horizontal) and 3×1 (vertical) semantics for degenerate shapes
                 if h_eff == 1 and w_eff == 3:
                     a, b = int(win[0][0]), int(win[0][2])
                     if a == b and a != 0:
@@ -547,9 +547,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     programs_ABS = []
     for (kind, c) in valid_ABS:
         extra = ""
-        if kind in ("h3", "v3"):
-            extra = f", pattern=[X, {int(c)}, X]"
-        elif kind == "window_nxm":
+        if kind == "window_nxm":
             # Include window shape only (centerless windows already carry per-window schema)
             extra = f", window_shape={WINDOW_SHAPE_DEFAULT}"
         programs_ABS.append(

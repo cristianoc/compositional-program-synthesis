@@ -152,7 +152,7 @@ def main():
     stats = measure(task, num_preops=200, seed=11)
     print("\n=== STATS (200 preops) ===")
     print(stats)
-    # Quick evaluation of other pattern kinds (v3, window_nxm) on train
+    # Quick evaluation of shapes on train
     def eval_kind(kind: str):
         best_c = _best_color_for_kind(task, kind)
         res = []
@@ -655,16 +655,16 @@ def main():
             render_grid_with_overlays(
                 g,
                 pred,
-                f"Train {i}: h3 (color={COLOR_H3}) (GT={int(ex['output'][0][0])})",
+                f"Train {i}: 1x3 (GT={int(ex['output'][0][0])})",
                 str(images_dir / f"overlay_train_{i}.png"),
-                kind="h3", color=COLOR_H3,
+                kind="window_nxm", color=COLOR_1x3, window_shape=(1,3),
             )
             render_grid_with_overlays(
                 g,
                 pred,
-                f"Train {i}: v3 (color={COLOR_V3}) (GT={int(ex['output'][0][0])})",
+                f"Train {i}: 3x1 (GT={int(ex['output'][0][0])})",
                 str(images_dir / f"overlay_train_{i}_v.png"),
-                kind="v3", color=COLOR_V3,
+                kind="window_nxm", color=COLOR_3x1, window_shape=(3,1),
             )
             render_grid_with_overlays(
                 g,
@@ -677,8 +677,8 @@ def main():
         # Test pic
         gtest = np.array(task["test"][0]["input"], dtype=int)
         predt = dsl.predict_bright_overlay_uniform_cross(gtest.tolist(), COLOR_Wn)
-        render_grid_with_overlays(gtest, predt, f"Test: h3 (color={COLOR_H3})", str(images_dir / "overlay_test.png"), kind="h3", color=COLOR_H3)
-        render_grid_with_overlays(gtest, predt, f"Test: v3 (color={COLOR_V3})", str(images_dir / "overlay_test_v.png"), kind="v3", color=COLOR_V3)
+        render_grid_with_overlays(gtest, predt, f"Test: 1x3", str(images_dir / "overlay_test.png"), kind="window_nxm", color=COLOR_1x3, window_shape=(1,3))
+        render_grid_with_overlays(gtest, predt, f"Test: 3x1", str(images_dir / "overlay_test_v.png"), kind="window_nxm", color=COLOR_3x1, window_shape=(3,1))
         render_grid_with_overlays(gtest, predt, f"Test: window_nxm (color={COLOR_Wn})", str(images_dir / "overlay_test_x.png"), kind="window_nxm", color=COLOR_Wn)
 
     # Composite mosaic (all train + test in one image for all kinds)
