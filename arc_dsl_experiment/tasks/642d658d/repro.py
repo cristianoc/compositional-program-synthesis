@@ -53,68 +53,23 @@ def main():
     COLOR_3x1 = _best_color_for_shape((3,1))
     COLOR_Wn = _best_color_for_shape(BASE_DEFAULT_SHAPE)
 
-    # Compute G once (shape-agnostic) and ABS per shape.
-    # G once
+    # Enumerate once: both G and ABS (ABS includes all three overlay shape instantiations)
     from importlib import reload
     reload(dsl)
     setattr(dsl, 'WINDOW_SHAPE_DEFAULT', BASE_DEFAULT_SHAPE)
-    g_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)['G']
-
-    # ABS per shape (avoid recomputing G)
-    def enumerate_abs_for_shape(shape: tuple[int,int]):
-        from importlib import reload
-        import numpy as np
-        import dsl as _dsl
-        reload(_dsl)
-        setattr(_dsl, 'WINDOW_SHAPE_DEFAULT', shape)
-        train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-        colors = list(range(1,10))
-        total_abs = len(_dsl.PATTERN_KINDS) * len(colors)
-        valid_abs = []
-        for kind in _dsl.PATTERN_KINDS:
-            for c in colors:
-                if not _dsl.pattern_present_in_all_examples(task, kind, c):
-                    continue
-                ok = True
-                for x,y in train_pairs:
-                    if _dsl.predict_with_pattern_kind(x.tolist(), kind, c) != y:
-                        ok = False; break
-                if ok:
-                    valid_abs.append((kind, c))
-        programs_abs = []
-        for (kind, c) in valid_abs:
-            extra = ""
-            if kind == "window_nxm":
-                extra = f", window_shape={shape}"
-            programs_abs.append(
-                f"PatternOverlayExtractor(kind={kind}, color={c}{extra}) |> UniformPatternPredicate |> OutputAgreedColor"
-            )
-        return {"nodes": total_abs, "programs": programs_abs}
-
-    programs_all = {}
-    for nm, sh in (("1x3", (1,3)), ("3x1", (3,1)), ("window", BASE_DEFAULT_SHAPE)):
-        abs_part = enumerate_abs_for_shape(sh)  # type: ignore[arg-type]
-        programs_all[nm] = {"G": g_once, "ABS": abs_part}
-    # Print a single combined, top-level structure (like before) and write combined JSON
+    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11)
+    # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
     try:
-        # Print node counts once
-        # G nodes are the same across shapes; ABS nodes represent 3 instantiations × 9 colors
-        any_shape = next(iter(programs_all.values()))
-        # G nodes from DSL to reflect current COLOR_RULES length (composition-only)
-        try:
-            g_nodes = len(dsl.COLOR_RULES)
-        except Exception:
-            g_nodes = any_shape['G']['nodes']
-        abs_nodes_single = any_shape['ABS']['nodes']
-        abs_nodes_total = abs_nodes_single * 3
+        # G nodes from DSL to reflect current COLOR_RULES length
+        g_nodes = len(dsl.COLOR_RULES)
+        abs_nodes = res_once['ABS']['nodes']
         print("=== Node counts ===")
         print(f"G core nodes: {g_nodes}")
-        print(f"Overlay+predicate nodes: {abs_nodes_total}")
+        print(f"Overlay+predicate nodes: {abs_nodes}")
 
-        # Print programs once
         print("\n=== Programs found (G core) ===")
-        g_progs = programs_all['window']['G']['programs'] if 'window' in programs_all else any_shape['G']['programs']
+        g_progs = res_once['G']['programs']
         if g_progs:
             for sname in g_progs:
                 print("-", sname)
@@ -122,59 +77,23 @@ def main():
             print("(none)")
 
         print("\n=== Programs found (overlay abstraction + pattern check) ===")
-        # Merge ABS programs from the three shapes
-        abs_all = []
-        for shape_name, res in programs_all.items():
-            abs_all.extend(res['ABS']['programs'])
-        if abs_all:
-            for sname in abs_all:
+        abs_progs = res_once['ABS']['programs']
+        if abs_progs:
+            for sname in abs_progs:
                 print("-", sname)
         else:
             print("(none)")
 
-        # Persist combined JSON
         with open(programs_path, "w", encoding="utf-8") as f:
-            json.dump(programs_all, f, indent=2, sort_keys=True)
+            json.dump(res_once, f, indent=2, sort_keys=True)
         print("Wrote", programs_path)
     except Exception as e:
         print("[warn] failed to write programs_found.json:", e)
 
     # Measure timing and counts (single pass, rounded to reduce noise)
     def measure(task, seed=11):
-                # G core
-        color_rules = dsl.COLOR_RULES
-        t0 = time.perf_counter()
-        valid_G = []
-        tried = 0; tries_first_G=None
-        for cn, cf in color_rules:
-            tried += 1
-            ok = True
-            for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-                if int(cf(x)) != y:
-                    ok=False; break
-            if ok:
-                valid_G.append(cn)
-                if tries_first_G is None: tries_first_G = tried
-        t1 = time.perf_counter()
-
-        # Abstraction (single pipeline)
-        t2 = time.perf_counter()
-        valid_ABS = []
-        tried2 = 1; tries_first_ABS=None
-        ok=True
-        for x,y in train_pairs:  # <-- CHECK on ALL training examples (selection criterion)
-            y_pred = dsl.predict_window_nxm_uniform_color(x, COLOR_Wn)
-            if y_pred != y:
-                ok=False; break
-        if ok:
-            valid_ABS.append('window_nxm')
-            tries_first_ABS = 1
-        t3 = time.perf_counter()
-
-        return {
-            "G": {"nodes": len(color_rules), "programs_found": len(valid_G), "tries_to_first": tries_first_G, "time_sec": round(t1-t0, 2)},
-            "ABS":{"nodes": 1, "programs_found": len(valid_ABS), "tries_to_first": tries_first_ABS, "time_sec": round(t3-t2, 2)},
-        }
+        # Use DSL's unified measurement which runs composition search for both G and ABS
+        return dsl.measure_spaces(task, seed=seed)
 
     stats = measure(task, seed=11)
     print("\n=== STATS ===")

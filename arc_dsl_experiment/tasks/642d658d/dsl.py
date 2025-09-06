@@ -102,12 +102,12 @@ PATTERN_KINDS: List[str] = ["window_nxm"]
 WINDOW_SHAPE_DEFAULT: tuple[int, int] = (3, 3)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
 # Optimization: pre-check that a pattern appears in all examples (train+test)
-def pattern_present_in_all_examples(task: Dict, kind: str, color: int) -> bool:
+def pattern_present_in_all_examples(task: Dict, kind: str, color: int, *, window_shape: Optional[tuple[int,int]] = None) -> bool:
     # task is ARC-like dict with "train" and "test" splits
     for split in ("train", "test"):
         for ex in task.get(split, []):
             g = ex["input"]
-            ovs = detect_overlays(g, kind=kind, color=int(color))
+            ovs = detect_overlays(g, kind=kind, color=int(color), window_shape=window_shape)
             if len(ovs) == 0:
                 return False
     return True
@@ -356,6 +356,16 @@ def predict_with_pattern_kind(grid: List[List[int]], kind: str, color: int) -> i
     gstate = GridState(np.asarray(grid, dtype=int))
     pipeline = Pipeline([
         OpBrightOverlayIdentity(kind=kind, color=color),
+        OpUniformPatternPredicate(),
+    ])
+    out = pipeline.run(gstate)
+    assert isinstance(out, ColorState)
+    return int(out.color)
+
+def predict_with_pattern_kind_shape(grid: List[List[int]], kind: str, color: int, *, window_shape: Optional[tuple[int,int]]) -> int:
+    gstate = GridState(np.asarray(grid, dtype=int))
+    pipeline = Pipeline([
+        OpBrightOverlayIdentity(kind=kind, color=color, window_shape=window_shape),
         OpUniformPatternPredicate(),
     ])
     out = pipeline.run(gstate)
@@ -874,15 +884,17 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
             programs_G.append(name)
     total_G = len(COLOR_RULES)
 
-    # Abstractions (overlay + predicate) for current window shape default
+    # Abstractions (overlay + predicate) across three shape instantiations, enumerated once
     colors = list(range(1, 10))
-    total_ABS = len(PATTERN_KINDS) * len(colors)
+    shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
+    total_ABS = len(PATTERN_KINDS) * len(colors) * len(shapes)
     abs_ops: List[Operation] = [OpUniformPatternPredicate()]
-    # Pre-instantiate overlay ops per color for kind=window_nxm with the current default shape
-    for c in colors:
-        if not pattern_present_in_all_examples(task, "window_nxm", c):
-            continue
-        abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=WINDOW_SHAPE_DEFAULT))
+    # Pre-instantiate overlay ops per (shape, color) for kind=window_nxm
+    for shape in shapes:
+        for c in colors:
+            if not pattern_present_in_all_examples(task, "window_nxm", c, window_shape=shape):
+                continue
+            abs_ops.append(OpBrightOverlayIdentity(kind="window_nxm", color=c, window_shape=shape))
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=2, min_depth=2, start_type=GridState, end_type=ColorState)
     programs_ABS = []
     for _, seq in winners_abs:
@@ -932,24 +944,26 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
             valid_G.append(cn)
             if not found: tries_first=tried; found=True
     t1=time.perf_counter()
-    # ABS (all pattern kinds and colors; no pre-ops)
-    t2=time.perf_counter(); valid_ABS: List[Tuple[str,int]]=[]; tried2=0; tries_first2=None; found2=False
+    # ABS (all shapes × colors; overlay + predicate; no pre-ops)
+    t2=time.perf_counter(); valid_ABS: List[Tuple[str,int,tuple[int,int]]]=[]; tried2=0; tries_first2=None; found2=False
     colors = list(range(1,10))
+    shapes: List[tuple[int,int]] = [(1,3), (3,1), WINDOW_SHAPE_DEFAULT]
     for kind in PATTERN_KINDS:
-        for c in colors:
-            # Optimization: skip candidates that cannot work because pattern missing in some input
-            if not pattern_present_in_all_examples(task, kind, c):
-                continue
-            tried2+=1; ok=True
-            for x,y in train_pairs:
-                if predict_with_pattern_kind(x.tolist(), kind, c) != y: ok=False; break
-            if ok:
-                valid_ABS.append((kind, c))
-                if not found2: tries_first2=tried2; found2=True
+        for shape in shapes:
+            for c in colors:
+                # Optimization: skip candidates that cannot work because pattern missing in some input
+                if not pattern_present_in_all_examples(task, kind, c, window_shape=shape):
+                    continue
+                tried2+=1; ok=True
+                for x,y in train_pairs:
+                    if predict_with_pattern_kind_shape(x.tolist(), kind, c, window_shape=shape) != y: ok=False; break
+                if ok:
+                    valid_ABS.append((kind, c, shape))
+                    if not found2: tries_first2=tried2; found2=True
     t3=time.perf_counter()
     return {
         "G":{"nodes": len(COLOR_RULES), "programs_found": len(valid_G),
              "tries_to_first": tries_first, "time_sec": t1-t0},
-        "ABS":{"nodes": len(PATTERN_KINDS)*9, "programs_found": len(valid_ABS),
+        "ABS":{"nodes": len(PATTERN_KINDS)*9*3, "programs_found": len(valid_ABS),
                "tries_to_first": tries_first2, "time_sec": t3-t2},
     } 
