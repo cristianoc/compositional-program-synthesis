@@ -48,6 +48,27 @@ PatternOverlayExtractor(kind=..., color=...) |> UniformPatternPredicate |> Outpu
 - Single-pass enumeration: ABS is enumerated once and includes all three `window_nxm` shape instantiations: `(1,3)`, `(3,1)`, and the default window.
 - Typed composition seeds: the only operations that accept `GridState` are the chooser ops for G and the overlay extractors for ABS (`OpBrightOverlayIdentity(kind=window_nxm, window_shape∈{(1,3),(3,1),default}, color∈1..9)`), followed by kind-appropriate predicates.
 
+## 2.1 Operations and Types
+
+G ops (core composition)
+
+| Operation (label) | Input type | Output type | Description |
+|---|---|---|---|
+| `choose_cross_implied_33` | `GridState` | `CenterState` | Choose center color maximizing 3×3 cross-equality constraint. |
+| `choose_best_flank` | `GridState` | `CenterState` | Choose center color maximizing flank-agreement hits. |
+| `choose_best_cross` | `GridState` | `CenterState` | Choose center color maximizing uniform 4-neighborhood hits. |
+| `out_cross_mode_33` | `CenterState` | `ColorState` | Output mode color from 3×3 cross around chosen centers. |
+| `out_flank_mode` | `CenterState` | `ColorState` | Output mode flank color around chosen centers. |
+
+Abstraction (A) ops
+
+| Operation (label) | Input type | Output type | Notes |
+|---|---|---|---|
+| `overlay_window_nxm` | `GridState` | `OverlayContext` | Parameterized by `color ∈ {1..9}` and `window_shape ∈ {(1,3),(3,1),default}`. |
+| `uniform_pattern_predicate` | `OverlayContext` | `ColorState` | Center-neighborhood evidence aggregation by shape parity. |
+
+These tables reflect the explicit op registries defined in `dsl.py` (`G_TYPED_OPS` and `A_OP_TYPE_SUMMARY`).
+
 ## 3. Results
 
 - Programs found (abstraction):
