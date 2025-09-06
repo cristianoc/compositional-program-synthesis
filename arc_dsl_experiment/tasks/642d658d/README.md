@@ -19,19 +19,11 @@
 | ![](images/test_0_in.png) |
 
 ## Pattern overlays in action
-- Left: grid with overlays for each pattern kind.
-  - `overlay_train_i.png`: h3 (horizontal `(x,c,x)` centers, for chosen color `c`)
-  - `overlay_train_i_v.png`: v3 (vertical `(x,c,x)` centers, for chosen color `c`)
-  - `overlay_train_i_x.png`: window_nxn (one overlay per full n×n window; centerless)
-- Right: predicted color.
+- Mosaic view with all train and test examples across pattern kinds:
+  - Columns: H3, V3, WINDOW (centerless n×n)
+  - Each panel shows the input grid with overlay boxes on the left and a single-cell output on the right.
 
-| Train 1 (GT=2) | Train 2 (GT=3) |
-|---|---|
-| ![](images/overlay_train_1.png) | ![](images/overlay_train_2.png) |
-
-| Train 3 (GT=8) | Test input (pred=2) |
-|---|---|
-| ![](images/overlay_train_3.png) | ![](images/overlay_test.png) |
+![](images/overlay_mosaic.png)
 
 ## Abstract
 The `PatternOverlayExtractor` emits overlays for three kinds: `h3` (horizontal `[X, c, X]` with center color `c`), `v3` (vertical `[X, c, X]`), and `window_nxn` (every full `n×n` window, centerless, each carrying its per-window schema). The `UniformPatternPredicate` then reads evidence consistent with the selected pattern to output a single color. For `h3`/`v3`, evidence is the nonzero flank color agreed at each center. For `window_nxn`, evidence comes from uniform, nonzero center neighborhoods inside each window (odd `n`: cross; even `n`: central 2×2). Program search enumerates pattern kinds × colors.
@@ -89,7 +81,7 @@ For `window_nxn`, programs include `window_size=n`. Each overlay already carries
 ## Reproducing
 
 Requirements:
-- Python 3.10+ with `numpy`, `matplotlib`
+- Python 3.10+ with `numpy`
 
 Run:
 ```bash
@@ -97,7 +89,7 @@ python3 repro.py
 ```
 
 Artifacts:
-- Images: `images/overlay_train_*.png`, `images/overlay_train_*_v.png`, `images/overlay_train_*_x.png`, `images/overlay_test*.png`
+- Image: `images/overlay_mosaic.png`
 - Stats: `repro_stats.json` (node counts, programs, timing), `pattern_stats.json` (per-example overlay details)
 
 Notes:
