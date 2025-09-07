@@ -9,7 +9,7 @@
 
 
 import json, time, numpy as np, os
-from typing import Optional, Any
+from typing import Optional, Any, Union
 from importlib import reload
 import sys
 from pathlib import Path
@@ -241,7 +241,7 @@ def main():
         images_dir = HERE / "images"
         images_dir.mkdir(exist_ok=True)
 
-        def build_panel_body_universal(g, shape: tuple[int,int], schemas_list: list[list[list[object]]], pred_color: int) -> np.ndarray:
+        def build_panel_body_universal(g, shape: tuple[int,int], schemas_list: list[list[list[Union[int, str]]]], pred_color: int) -> np.ndarray:
             # Draw base grid and rectangles for each match
             g = np.asarray(g, dtype=int)
             SCALE = 16
@@ -347,8 +347,12 @@ def main():
                             # Use first found program for each shape (avoid duplicates)
                             if shape not in shape_to_program:
                                 shape_to_program[shape] = (seq[0], seq[1])
-                                # Extract schemas from the matcher
-                                shape_to_schemas[shape] = getattr(seq[0], 'schemas', [])
+                                # Extract schemas from the matcher (already properly typed)
+                                matcher = seq[0]
+                                if isinstance(matcher, dsl.OpMatchAnyUniversalSchemas):
+                                    shape_to_schemas[shape] = matcher.schemas
+                                else:
+                                    shape_to_schemas[shape] = []
                         except:
                             pass
             

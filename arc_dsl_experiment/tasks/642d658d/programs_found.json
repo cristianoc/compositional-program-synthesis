@@ -12,7 +12,7 @@
       "match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]"
     ],
     "programs_found": 8,
-    "time_sec": 0.5831084169913083
+    "time_sec": 0.5920905829989351
   },
   "G": {
     "nodes": 70,
@@ -21,6 +21,6 @@
       "compose(choose_cross_implied_33->out_flank_mode)"
     ],
     "programs_found": 2,
-    "time_sec": 0.007308624975848943
+    "time_sec": 0.007308083004318178
   }
 }
