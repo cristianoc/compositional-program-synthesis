@@ -16,7 +16,7 @@
 
 
 from __future__ import annotations
-from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic, Union
+from typing import Dict, Iterable, List, Tuple, Optional, Callable, Type, TypeVar, Generic, Union, Any
 import numpy as np
 from overlay_patterns import detect_pattern_overlays
 # ===================== Typed, compositional DSL =====================
@@ -413,7 +413,7 @@ def _build_combined_schema_from_windows(wins: List[np.ndarray]) -> List[List[Uni
             vals = {int(win[i, j]) for win in wins}
             pos_vals.append(vals)
     is_const = [len(s) == 1 for s in pos_vals]
-    const_val: List[Optional[int]] = [next(iter(s)) if len(s) == 1 else None for s in pos_vals]
+    const_val: List[int] = [next(iter(s)) if len(s) == 1 else -1 for s in pos_vals]  # -1 placeholder for non-const
     # Equality relation among non-constant positions
     npos = hh * ww
     adj = [[False] * npos for _ in range(npos)]
@@ -457,7 +457,7 @@ def _build_combined_schema_from_windows(wins: List[np.ndarray]) -> List[List[Uni
     for p in range(npos):
         if is_const[p]:
             i, j = divmod(p, ww)
-            schema[i][j] = int(const_val[p]) if const_val[p] is not None else "*"
+            schema[i][j] = const_val[p]
     var_tokens = ("X", "Y", "Z", "U", "V", "W")
     next_var = 0
     for comp in comps:
@@ -652,23 +652,23 @@ def intersect_universal_schemas(schemas: List[List[List[Union[int, str]]]]) -> L
     npos = hh * ww
     # Determine positions that are constants with the same value across all schemas
     is_const_global = [True] * npos
-    const_value_global: List[Optional[int]] = [None] * npos
+    const_value_global: List[int] = [-1] * npos  # -1 placeholder for non-const positions
     for p in range(npos):
         i, j = divmod(p, ww)
-        vals: List[Optional[int]] = []
+        vals: List[int] = []
         ok = True
         for sc in schemas:
             s = sc[i][j]
             if isinstance(s, int):
-                vals.append(int(s))
+                vals.append(s)
             else:
                 ok = False
                 break
         if ok and vals and all(v == vals[0] for v in vals):
-            const_value_global[p] = int(vals[0])
+            const_value_global[p] = vals[0]  # vals[0] is guaranteed to be int here
             is_const_global[p] = True
         else:
-            const_value_global[p] = None
+            const_value_global[p] = -1  # placeholder value
             is_const_global[p] = False
 
     # Equality relation among non-constant positions that holds in every schema
@@ -733,9 +733,9 @@ def intersect_universal_schemas(schemas: List[List[List[Union[int, str]]]]) -> L
     # Assemble intersected schema
     out: List[List[Union[int, str]]] = [["*" for _ in range(ww)] for _ in range(hh)]
     for p in range(npos):
-        if is_const_global[p] and const_value_global[p] is not None:
+        if is_const_global[p]:
             i, j = divmod(p, ww)
-            out[i][j] = int(const_value_global[p])
+            out[i][j] = const_value_global[p]
     var_tokens = ("X", "Y", "Z", "U", "V", "W")
     next_var = 0
     for comp in comps:
@@ -784,7 +784,7 @@ def intersect_universal_schemas(schemas: List[List[List[Union[int, str]]]]) -> L
     return out
 
 
-def validate_universal_schema_on_windows(schema: List[List[Union[int,str]]], wins: List[np.ndarray]) -> Dict[str, Union[int, List[dict]]]:
+def validate_universal_schema_on_windows(schema: List[List[Union[int,str]]], wins: List[np.ndarray]) -> Dict[str, Any]:
     """Validate that 'schema' matches every window in 'wins'. Returns a report."""
     violations: List[dict] = []
     ok = 0
@@ -1381,7 +1381,7 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     matcher_seeds = 0
     for ushape in shapes_universal:
         try:
-            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
             if uni_schemas:
                 schemas_list = list(uni_schemas.values())
                 abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
@@ -1477,7 +1477,7 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
     ]
     for ushape in shapes:
         try:
-            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
             if uni_schemas:
                 schemas_list = list(uni_schemas.values())
                 abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
