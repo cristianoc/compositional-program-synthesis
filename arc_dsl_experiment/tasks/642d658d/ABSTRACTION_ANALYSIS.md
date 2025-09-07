@@ -34,14 +34,14 @@ match_universal_pos: Grid → MatchesState
 **Fundamental Transformation:**
 - **Input Domain**: Raw pixel grids (concrete)
 - **Output Domain**: Structured pattern match representations (abstract)  
-- **Final Output**: Single color per grid position
+- **Final Output**: Single color per grid
 - **Key Property**: Dimensionality reduction from grid space to pattern space
 
 **Intermediate Representation Properties:**
 - **Positions**: Where patterns match in the grid
 - **Variables**: Bound pattern variables (X, Y, Z) with their values
 - **Constraints**: Pattern structure constraints satisfied
-- **Metadata**: Pattern shape, match confidence, structural information
+- **Metadata (current)**: Window coords, matched subgrid, schema; **Extensions**: confidence score, variable bindings
 
 ### 3. Compositional Speedup Analysis
 
@@ -118,6 +118,8 @@ Grid → Color = (Grid → MatchesState) ∘ (MatchesState → Color)
 - **Stage 2**: Aggregation enumeration (independent of grid size)
 - **Result**: Linear scaling in pattern library, not exponential in grid size
 
+Overall runtime = Stage-1 matching O(H×W×h×w×#schemas) + Stage-2 enumeration O(#aggregators × #matcher_seeds).
+
 ### 7. Abstraction-Refinement Framework
 
 **Core Principle**: Transform intractable concrete search into tractable abstract search
@@ -147,6 +149,8 @@ Concrete Domain (G) ←embed← Abstract Domain (A)
 - **Adaptive parameter**: `universal_schema` (determined from train+test inputs)
 - **Test-time adaptation**: Test input helps determine the optimal schema parameterization
 
+We report these as **oracle/upper-bound** results; a train-only variant is needed for fair generalization tests.
+
 **Hard-coded Assumptions:**
 - `center_value=4`: Filters patterns based on specific color appearing at center
 - Limits generality across tasks with different focal colors
@@ -162,7 +166,7 @@ Concrete Domain (G) ←embed← Abstract Domain (A)
 - Could be extended with confidence scores, multiple pattern types
 - Represents one point in the space of possible pattern abstractions
 
-### 8. Failure Mode Analysis
+### 9. Failure Mode Analysis
 
 **Pattern Coverage Failure:**
 - **Cause**: Required patterns not in universal schema library
