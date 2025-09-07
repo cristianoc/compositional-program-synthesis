@@ -188,6 +188,29 @@ This mosaic shows:
 - **Columns**: Different pattern shapes (1×3, 3×1, 3×3, 5×5)
 - **Rows**: Training and test examples
 
+### Important Finding: Aggregator Sensitivity
+
+The 5×5 results reveal a critical insight about the interaction between pattern matching and aggregation:
+
+```
+- match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatches [✗ 0/1 test]
+- match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatchesExcludeGlobal [✗ 0/1 test]  
+- match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [✓ 1/1 test]
+```
+
+**The same pattern matcher** `match_universal_pos(shape=(5, 5))` finds valid, structured patterns, but different aggregators interpret these matches differently. This reveals several insights:
+
+**What this means for finding the "right" solution:**
+
+1. **Pattern quality ≠ Aggregation success**: Valid patterns can fail with wrong aggregators
+2. **Aggregator choice is crucial**: The same matches interpreted differently can succeed or fail
+3. **Training accuracy is necessary but not sufficient**: All these programs work on training, but aggregation strategy determines test success
+4. **Cross-only filtering helps**: The successful variant uses `cross_only=True`, suggesting spatial filtering improves generalization
+
+**Visual impact**: The mosaic uses the first found aggregator for each shape, so the 5×5 column shows results from `OpUniformColorFromMatches` (which fails test), not `OpUniformColorFromMatchesExcludeGlobal(cross_only=True)` (which succeeds).
+
+This demonstrates that **the "right" solution depends on both finding good patterns AND choosing the right way to aggregate the results**. Test performance indicators (✓/✗) are essential for identifying which aggregation strategies generalize beyond training data.
+
 ## Technical Implementation
 
 ### Core Operations
@@ -230,8 +253,9 @@ dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3),(5,5)]
 ## Key Insights
 
 1. **Universal patterns** work across all training examples, making them robust
-2. **Multiple shapes** capture different types of spatial relationships
+2. **Multiple shapes** capture different types of spatial relationships  
 3. **Test indicators** (✓/✗) help distinguish reliable vs. overfitted programs
 4. **Aggregation strategy** is crucial - different tasks need different approaches
+5. **Aggregation strategy determines success**: The 5×5 example shows how the same valid patterns can succeed or fail depending on the aggregation method
 
-The core insight is that ARC tasks often have consistent local patterns, and by finding the intersection of these patterns across examples, we can build reliable predictors for new inputs.
+The core insight is that ARC tasks often have consistent local patterns, and by finding the intersection of these patterns across examples, we can build reliable predictors for new inputs. However, **perfect training accuracy does not guarantee the right solution** - test evaluation reveals which aggregation strategies truly generalize beyond the training data.
