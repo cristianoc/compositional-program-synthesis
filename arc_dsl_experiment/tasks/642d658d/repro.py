@@ -30,10 +30,10 @@ def main():
     task = json.loads(Path(TASK_PATH).read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
 
-    # Enumerate once: both G and ABS (ABS includes all three universal shapes)
+    # Enumerate once: both G and ABS (ABS includes all universal shapes)
     from importlib import reload
     reload(dsl)
-    SHAPES = [(1,3),(3,1),(3,3)]
+    SHAPES = [(1,3),(3,1),(3,3),(5,5)]
     res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
@@ -61,8 +61,13 @@ def main():
         else:
             print("(none)")
 
+        # Save JSON without program sequences (which aren't JSON serializable)
+        json_output = {k: v for k, v in res_once.items()}
+        if "ABS" in json_output and "program_sequences" in json_output["ABS"]:
+            json_output["ABS"] = {k: v for k, v in json_output["ABS"].items() if k != "program_sequences"}
+        
         with open(programs_path, "w", encoding="utf-8") as f:
-            json.dump(res_once, f, indent=2, sort_keys=True)
+            json.dump(json_output, f, indent=2, sort_keys=True)
         print("Wrote", programs_path)
     except Exception as e:
         print("[warn] failed to write programs_found.json:", e)
@@ -97,9 +102,9 @@ def main():
     except Exception as e:
         sprint(f"[warn] failed to print universal schemas: {e}")
 
-    # Save captured schema output to file (removed)
+    # Mosaic visualization using actual found programs
 
-    # Render pictures (universal matches) without matplotlib for better determinism
+     # Render pictures (universal matches) without matplotlib for better determinism
     os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
     PALETTE = {
         0:(0,0,0), 1:(0,0,255), 2:(255,0,0), 3:(0,255,0), 4:(255,255,0),
@@ -326,25 +331,41 @@ def main():
             spacer = np.full((target_h, spacer_w, 3), 255, dtype=np.uint8)
             return np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
 
-        def render_mosaic_universal_all_examples(task, out_path: str):
-            # Prepare schemas per shape once
-            shapes = SHAPES
-            schemas_per_shape: dict[tuple[int,int], list[list[list[object]]]] = {}
-            for ushape in shapes:
-                uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
-                schemas_per_shape[tuple(ushape)] = list(uni.values()) if uni else []
-
-            # Choose aggregator: uniform neighborhood
+        def render_mosaic_universal_all_examples(task, out_path: str, found_programs):
+            # Extract unique shapes and their programs from found sequences
+            shape_to_program = {}  # shape -> (matcher, aggregator) tuple
+            shape_to_schemas = {}   # shape -> schemas list for visualization
+            
+            for prog_name, seq in found_programs:
+                if len(seq) == 2 and isinstance(seq[0], dsl.OpMatchAnyUniversalSchemas):
+                    # Parse shape from matcher's label
+                    label = getattr(seq[0], 'label', '')
+                    if 'shape=' in label:
+                        try:
+                            shape_str = label.split('shape=')[1].split(')')[0] + ')'
+                            shape = eval(shape_str)
+                            # Use first found program for each shape (avoid duplicates)
+                            if shape not in shape_to_program:
+                                shape_to_program[shape] = (seq[0], seq[1])
+                                # Extract schemas from the matcher
+                                shape_to_schemas[shape] = getattr(seq[0], 'schemas', [])
+                        except:
+                            pass
+            
+            # Only visualize shapes that have found programs
+            shapes = sorted(shape_to_program.keys())  # Sort for consistent ordering
+            
+            # Simple prediction function that directly uses the found program
             def predict_for_grid(g, shape):
-                schemas_list = schemas_per_shape[tuple(shape)]
-                if not schemas_list:
+                if shape not in shape_to_program:
                     return 0
-                pipe = dsl.Pipeline([
-                    dsl.OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})"),
-                    dsl.OpUniformColorFromMatchesUniformNeighborhood(),
-                ])
-                out = pipe.run(dsl.GridState(np.asarray(g, dtype=int)))
-                return int(getattr(out, 'color', 0))
+                matcher, aggregator = shape_to_program[shape]
+                pipe = dsl.Pipeline([matcher, aggregator])
+                try:
+                    out = pipe.run(dsl.GridState(np.asarray(g, dtype=int)))
+                    return int(getattr(out, 'color', 0))
+                except:
+                    return 0
 
             # Build rows
             rows = []
@@ -355,7 +376,7 @@ def main():
                 pan = []
                 for _, shape in kinds:
                     pred = predict_for_grid(g, shape)
-                    schemas_list = schemas_per_shape[tuple(shape)]
+                    schemas_list = shape_to_schemas[shape]
                     pan.append(build_panel_body_universal(g, shape, schemas_list, pred))
                 rows.append(pan); row_labels.append(f"TRAIN {idx}")
             for idx, ex in enumerate(task["test"], start=1):
@@ -363,7 +384,7 @@ def main():
                 pan = []
                 for _, shape in kinds:
                     pred = predict_for_grid(g, shape)
-                    schemas_list = schemas_per_shape[tuple(shape)]
+                    schemas_list = shape_to_schemas[shape]
                     pan.append(build_panel_body_universal(g, shape, schemas_list, pred))
                 rows.append(pan); row_labels.append(f"TEST {idx}")
 
@@ -415,7 +436,10 @@ def main():
             save_png(out_path, mosaic)
             return out_path
 
-        render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"))
+        # Get found programs from enumeration results - use actual sequences
+        found_abs_programs = res_once["ABS"].get("program_sequences", [])
+        
+        render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"), found_abs_programs)
         print("Wrote", images_dir / "overlay_mosaic.png")
     except Exception as e:
         print("[warn] failed to render universal mosaic:", e)

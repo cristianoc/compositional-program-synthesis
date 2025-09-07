@@ -1395,18 +1395,50 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
     t3 = time.perf_counter()
     programs_ABS = []
+    
+    # Evaluate each found program on test cases
+    test_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["test"]]
+    
     for name, seq in winners_abs:
         # Pretty-print sequences in a readable, parameterized style
         if len(seq) == 2 and isinstance(seq[0], (OpMatchFixedSchema, OpMatchAnyUniversalSchemas)) and isinstance(seq[1], (OpUniformColorFromMatchesExcludeGlobal, OpUniformColorPerSchemaThenMode, OpUniformColorFromSchemaConstantsOnly, OpUniformColorFromMatches, OpUniformColorFromMatchesUniformNeighborhood)):
             m0 = seq[0]
-            aggname = seq[1].__class__.__name__
-            programs_ABS.append(f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}")
+            agg = seq[1]
+            aggname = agg.__class__.__name__
+            
+            # Add parameter info for parameterized aggregators to avoid duplicates
+            if isinstance(agg, OpUniformColorFromMatchesExcludeGlobal) and getattr(agg, 'cross_only', False):
+                aggname += "(cross_only=True)"
+            elif isinstance(agg, OpUniformColorPerSchemaThenMode) and not getattr(agg, 'cross_only', True):
+                aggname += "(cross_only=False)"
+            
+            prog_name = f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}"
         else:
             # Fallback: use labels
-            programs_ABS.append(name)
+            prog_name = name
+        
+        # Evaluate on test
+        test_correct = 0
+        test_preds = []
+        for x, y in test_pairs:
+            try:
+                state: State = GridState(x)
+                for op in seq:
+                    state = op.apply(state)  # type: ignore[arg-type]
+                assert isinstance(state, ColorState)
+                pred = int(state.color)
+                test_preds.append(pred)
+                if pred == y:
+                    test_correct += 1
+            except Exception:
+                test_preds.append(-1)  # Error marker
+        
+        test_status = "✓" if test_correct == len(test_pairs) else "✗"
+        # Single programs list with test indicators (eliminates redundancy)
+        programs_ABS.append(f"{prog_name} [{test_status} {test_correct}/{len(test_pairs)} test]")
 
     return {"G": {"nodes": total_G, "programs": programs_G, "programs_found": len(programs_G), "time_sec": (t1 - t0)},
-            "ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t3 - t2)}}
+            "ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t3 - t2), "program_sequences": winners_abs}}
 # Pretty-prints the programs and node counts (README_clean.md §4).
 def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)

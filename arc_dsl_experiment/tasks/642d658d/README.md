@@ -106,5 +106,5 @@ Notes:
 - Code is pattern-only.
  - To include universal schema matchers for specific shapes in enumeration, pass them explicitly:
   ```python
-  dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3)])
+  dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3),(5,5)])
   ```
