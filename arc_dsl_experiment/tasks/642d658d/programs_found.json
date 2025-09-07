@@ -1,18 +1,25 @@
 {
   "ABS": {
-    "nodes": 4,
+    "nodes": 5,
     "programs": [
-      "match_universal_pos(shape=(1, 3)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
-      "match_universal_pos(shape=(3, 1)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
-      "match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]",
-      "match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
-      "match_universal_pos(shape=(3, 3)) |> OpUniformColorPerSchemaThenMode(cross_only=False) [\u2713 1/1 test]",
-      "match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatches [\u2717 0/1 test]",
-      "match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatchesExcludeGlobal [\u2717 0/1 test]",
-      "match_universal_pos(shape=(5, 5)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]"
+      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]",
+      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
+      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> OpUniformColorPerSchemaThenMode [\u2713 1/1 test]",
+      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> OpUniformColorFromMatches [\u2713 1/1 test]",
+      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> OpUniformColorFromMatchesExcludeGlobal [\u2713 1/1 test]",
+      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> OpUniformColorPerSchemaThenMode(cross_only=False) [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> OpUniformColorPerSchemaThenMode [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorFromMatches [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorFromMatchesExcludeGlobal [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorFromMatchesUniformNeighborhood [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorPerSchemaThenMode [\u2713 1/1 test]",
+      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorPerSchemaThenMode(cross_only=False) [\u2713 1/1 test]"
     ],
-    "programs_found": 8,
-    "time_sec": 0.5920905829989351
+    "programs_found": 15,
+    "time_sec": 0.04674508300377056
   },
   "G": {
     "nodes": 70,
@@ -21,6 +28,6 @@
       "compose(choose_cross_implied_33->out_flank_mode)"
     ],
     "programs_found": 2,
-    "time_sec": 0.007308083004318178
+    "time_sec": 0.007281166967004538
   }
 }

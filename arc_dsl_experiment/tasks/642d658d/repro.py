@@ -33,7 +33,7 @@ def main():
     # Enumerate once: both G and ABS (ABS includes all universal shapes)
     from importlib import reload
     reload(dsl)
-    SHAPES = [(1,3),(3,1),(3,3),(5,5)]
+    SHAPES = [(1,3),(3,1),(2,3),(3,3),(5,5)]
     res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
@@ -285,7 +285,26 @@ def main():
                         return False
                     vals.append(int(v))
                 return bool(vals) and len(set(vals))==1 and vals[0]!=0
-            matches = [m for m in matches if _is_uniform_match(m)]
+            # Filter matches more permissively - allow wildcards in neighborhood positions
+            def _is_good_match(m):
+                mg = m.get('match'); sc = m.get('schema')
+                if mg is None:
+                    return False
+                nr = len(mg); nc = len(mg[0]) if nr>0 else 0
+                if nr==0 or nc==0:
+                    return False
+                poss = _neighborhood_positions(nr, nc)
+                if not poss:  # No neighborhood defined, include all matches
+                    return True
+                vals = []
+                for (i,j) in poss:
+                    v = mg[i][j]
+                    if v is not None:  # Allow None (wildcards), just collect non-None values
+                        vals.append(int(v))
+                # Require at least some non-wildcard values in neighborhood, and they should be uniform
+                return len(vals) >= 1 and (len(set(vals)) == 1) and vals[0] != 0
+            
+            matches = [m for m in matches if _is_good_match(m)]
             for ov in sorted(matches, key=lambda ov: (ov["y1"], ov["x1"])):
                 y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
                 draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
@@ -356,8 +375,8 @@ def main():
                         except:
                             pass
             
-            # Only visualize shapes that have found programs
-            shapes = sorted(shape_to_program.keys())  # Sort for consistent ordering
+            # Use all available shapes (now that we select best pattern per shape)
+            shapes = sorted(shape_to_program.keys())
             
             # Simple prediction function that directly uses the found program
             def predict_for_grid(g, shape):
@@ -440,7 +459,7 @@ def main():
             save_png(out_path, mosaic)
             return out_path
 
-        # Get found programs from enumeration results - use actual sequences
+        # Get found programs from enumeration results - use actual sequences (before JSON filtering)
         found_abs_programs = res_once["ABS"].get("program_sequences", [])
         
         render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"), found_abs_programs)

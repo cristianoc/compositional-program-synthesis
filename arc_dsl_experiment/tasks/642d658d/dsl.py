@@ -594,6 +594,52 @@ def _iterate_full_windows(g: np.ndarray, window_shape: tuple[int,int]) -> List[n
             wins.append(g[y1:y2+1, x1:x2+1].copy())
     return wins
 
+def select_best_pattern_position(uni_schemas: Dict[tuple[int,int], List[List[Union[int,str]]]]) -> tuple[tuple[int,int], List[List[Union[int,str]]]]:
+    """Select the pattern position with highest structural complexity from a set of universal schemas."""
+    from collections import Counter
+    
+    def analyze_schema_structure(schema):
+        """Analyze structural complexity of a schema."""
+        if not schema or not schema[0]:
+            return 0
+        
+        nr, nc = len(schema), len(schema[0])
+        constraint_positions = 0
+        variable_counts = Counter()
+        
+        for i in range(nr):
+            for j in range(nc):
+                cell = schema[i][j]
+                if cell != '*':  # Not a wildcard
+                    constraint_positions += 1
+                    if isinstance(cell, str) and cell.isalpha():  # Variable
+                        variable_counts[cell] += 1
+        
+        # Calculate structure score
+        variable_relationships = sum(count - 1 for count in variable_counts.values() if count > 1)
+        variable_diversity = len(variable_counts)
+        relationship_bonus = variable_relationships * 2  # High weight for repeated variables
+        diversity_bonus = variable_diversity
+        
+        return constraint_positions + relationship_bonus + diversity_bonus
+    
+    # Score all positions
+    scored_positions = []
+    for pos, schema in uni_schemas.items():
+        score = analyze_schema_structure(schema)
+        scored_positions.append((pos, schema, score))
+    
+    # Return the position with highest structural complexity
+    if scored_positions:
+        scored_positions.sort(key=lambda x: x[2], reverse=True)
+        best_pos, best_schema, best_score = scored_positions[0]
+        return best_pos, best_schema
+    else:
+        # Fallback to first available position
+        first_pos = next(iter(uni_schemas.keys()))
+        return first_pos, uni_schemas[first_pos]
+
+
 def build_intersected_universal_schemas_for_task(task: Dict, *, window_shape: tuple[int,int]=(3,3), center_value: int = 4, splits: tuple[str,...] = ("train","test")) -> Dict[tuple[int,int], List[List[Union[int,str]]]]:
     """For each position (ri,rj) in the window, build the universal schema intersection across all inputs
     for the cohort of windows whose (ri,rj) equals center_value. Only positions present in every input
@@ -1383,8 +1429,9 @@ def enumerate_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 1
         try:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
             if uni_schemas:
-                schemas_list = list(uni_schemas.values())
-                abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
+                # Select best pattern position based on structural complexity
+                best_pos, best_schema = select_best_pattern_position(uni_schemas)
+                abs_ops.append(OpMatchAnyUniversalSchemas([best_schema], label=f"match_universal_pos(shape={tuple(ushape)},pos={best_pos})"))
                 matcher_seeds += 1
         except Exception:
             continue
@@ -1479,8 +1526,9 @@ def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
         try:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
             if uni_schemas:
-                schemas_list = list(uni_schemas.values())
-                abs_ops.append(OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={tuple(ushape)})"))
+                # Select best pattern position based on structural complexity
+                best_pos, best_schema = select_best_pattern_position(uni_schemas)
+                abs_ops.append(OpMatchAnyUniversalSchemas([best_schema], label=f"match_universal_pos(shape={tuple(ushape)},pos={best_pos})"))
         except Exception:
             pass
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=GridState, end_type=ColorState)
