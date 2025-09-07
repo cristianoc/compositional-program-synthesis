@@ -153,7 +153,7 @@ Match requires the full schema to fit within grid bounds.
 
 ### 5. Aggregation: From Matches to Color
 
-After finding all pattern matches, we need to decide on a single output color. Different **aggregators** use different strategies:
+After finding all pattern matches from the selected optimal position, we need to decide on a single output color. Different **aggregators** use different strategies:
 
 **Important**: Aggregators only consider positions with actual constraints (numbers or variables). **Wildcard positions ("*") are completely ignored** during color aggregation.
 
@@ -195,7 +195,7 @@ Example: `match_universal_pos(shape=(3,3)) |> OpUniformColorFromMatchesUniformNe
 1. **Extract windows** around color 4 centers from all training inputs
 2. **Build universal schemas** by intersecting patterns across examples  
 3. **Select best pattern position** for each shape based on structural complexity
-4. **Test multiple shapes** (1×3, 3×1, 2×3, 3×3, 5×5) using their optimal patterns
+4. **Test multiple shapes** (1×3, 3×1, 2×3, 3×3, 5×5) using their optimal patterns - only shapes achieving perfect training accuracy produce programs
 
 ### Prediction Phase  
 1. **Apply universal matchers** to find all pattern occurrences in test input
@@ -217,10 +217,18 @@ The `[✓ 1/1 test]` indicator shows this program correctly predicts the test ca
 ![](images/overlay_mosaic.png)
 
 This mosaic shows:
-- **Left panels**: Input grids with yellow rectangles marking where patterns match
-- **Right panels**: The predicted output color
-- **Columns**: Different pattern shapes (1×3, 3×1, 2×3, 3×3, 5×5)
+- **Left panels**: Input grids with yellow rectangles marking where the optimal patterns match
+- **Right panels**: The predicted output color from the best aggregator for each shape
+- **Columns**: Successful pattern shapes (1×3, 3×1, 2×3, 3×3) using their structurally best positions
 - **Rows**: Training and test examples
+
+**Pattern Selection**: Yellow rectangles show matches for the structurally most complex pattern position of each **successful** shape:
+- (1×3): Position (0,1) - Linear symmetry `[X, 4, X]`
+- (2×3): Position (0,1) - T-pattern `[X, 4, X][*, X, *]`  
+- (3×1): Position (1,0) - Vertical symmetry
+- (3×3): Position (1,1) - Perfect cross pattern
+
+**Note**: (5×5) patterns are generated but don't produce programs that achieve perfect training accuracy, so they don't appear in the found programs list. This demonstrates that **structural complexity doesn't guarantee predictive success** - patterns can be highly structured but still fail to generalize.
 
 ### Important Finding: Aggregator Sensitivity
 
@@ -287,10 +295,13 @@ dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(2,3),(3,3),
 ## Key Insights
 
 1. **Universal patterns** work across all training examples, making them robust
-2. **Structural complexity selection** automatically identifies the most informative pattern position for each shape
-3. **Multiple shapes** capture different types of spatial relationships  
-4. **Test indicators** (✓/✗) help distinguish reliable vs. overfitted programs
-5. **Aggregation strategy** is crucial - different tasks need different approaches
-6. **Cross patterns emerge naturally**: Center positions (1,1) consistently yield the highest structural scores across shapes
+2. **Structural complexity selection** automatically identifies the most informative pattern position for each shape, eliminating the need for complex post-processing filters
+3. **Quality through selection, not filtering**: Choosing the right pattern position is more effective than applying complex match filtering
+4. **Multiple shapes** capture different types of spatial relationships at optimal positions
+5. **Test indicators** (✓/✗) help distinguish reliable vs. overfitted programs
+6. **Aggregation strategy** is crucial - different tasks need different approaches
+7. **Cross patterns emerge naturally**: Center positions (1,1) consistently yield the highest structural scores across shapes
+8. **Simple visualization**: All matches from optimal patterns provide clean, interpretable results without additional filtering
+9. **Natural selection pressure**: Not all pattern shapes produce working programs - only those achieving perfect training accuracy survive the enumeration process
 
-The core insight is that ARC tasks often have consistent local patterns, and by finding the intersection of these patterns across examples, we can build reliable predictors for new inputs. However, **perfect training accuracy does not guarantee the right solution** - test evaluation reveals which aggregation strategies truly generalize beyond the training data.
+The core insight is that ARC tasks often have consistent local patterns, and by finding the intersection of these patterns across examples, we can build reliable predictors for new inputs. **Structural complexity-based pattern selection** ensures we focus on the most informative patterns without complex post-processing. However, **perfect training accuracy does not guarantee the right solution** - test evaluation reveals which aggregation strategies truly generalize beyond the training data.

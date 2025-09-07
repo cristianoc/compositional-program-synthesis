@@ -250,61 +250,7 @@ def main():
             pipe_match = dsl.Pipeline([dsl.OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})")])
             mstate = pipe_match.run(dsl.GridState(g))
             matches = getattr(mstate, 'matches', [])
-            # Filter to evidence windows consistent with the uniform-neighborhood aggregator
-            def _neighborhood_positions(nr: int, nc: int):
-                if nr == 1 and nc == 3:
-                    return [(0,0),(0,2)]
-                if nr == 3 and nc == 1:
-                    return [(0,0),(2,0)]
-                if nr % 2 == 1 and nc % 2 == 1:
-                    ci, cj = nr//2, nc//2
-                    return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
-                if nr % 2 == 0 and nc % 2 == 0:
-                    i0, i1 = nr//2 - 1, nr//2
-                    j0, j1 = nc//2 - 1, nc//2
-                    return [(i0,j0),(i0,j1),(i1,j0),(i1,j1)]
-                if nr % 2 == 1 and nc % 2 == 0:
-                    ci = nr//2; j0, j1 = nc//2 - 1, nc//2
-                    return [(ci,j0),(ci,j1)]
-                if nr % 2 == 0 and nc % 2 == 1:
-                    cj = nc//2; i0, i1 = nr//2 - 1, nr//2
-                    return [(i0,cj),(i1,cj)]
-                return []
-            def _is_uniform_match(m):
-                mg = m.get('match'); sc = m.get('schema')
-                if mg is None:
-                    return False
-                nr = len(mg); nc = len(mg[0]) if nr>0 else 0
-                if nr==0 or nc==0:
-                    return False
-                poss = _neighborhood_positions(nr, nc)
-                vals = []
-                for (i,j) in poss:
-                    v = mg[i][j]
-                    if v is None:
-                        return False
-                    vals.append(int(v))
-                return bool(vals) and len(set(vals))==1 and vals[0]!=0
-            # Filter matches more permissively - allow wildcards in neighborhood positions
-            def _is_good_match(m):
-                mg = m.get('match'); sc = m.get('schema')
-                if mg is None:
-                    return False
-                nr = len(mg); nc = len(mg[0]) if nr>0 else 0
-                if nr==0 or nc==0:
-                    return False
-                poss = _neighborhood_positions(nr, nc)
-                if not poss:  # No neighborhood defined, include all matches
-                    return True
-                vals = []
-                for (i,j) in poss:
-                    v = mg[i][j]
-                    if v is not None:  # Allow None (wildcards), just collect non-None values
-                        vals.append(int(v))
-                # Require at least some non-wildcard values in neighborhood, and they should be uniform
-                return len(vals) >= 1 and (len(set(vals)) == 1) and vals[0] != 0
-            
-            matches = [m for m in matches if _is_good_match(m)]
+            # Show all pattern matches (structural complexity selection provides quality control)
             for ov in sorted(matches, key=lambda ov: (ov["y1"], ov["x1"])):
                 y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
                 draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
