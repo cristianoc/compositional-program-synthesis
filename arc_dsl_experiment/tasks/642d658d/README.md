@@ -48,7 +48,7 @@ This pattern means:
 ### 2. Pattern Matching Process
 
 For each training example, we:
-1. **Extract windows** of different shapes (1×3, 3×1, 3×3, 5×5) from the input grid
+1. **Extract windows** of different shapes (1×3, 3×1, 2×3, 3×3, 5×5) from the input grid
 2. **For each position in the window template**, collect windows where that position contains color 4
 3. **Create schemas** from these window collections by identifying constant vs. variable positions
 4. **Intersect schemas** across all examples to find universal patterns
@@ -107,6 +107,26 @@ Intersection schema:
 ```
 
 The intersection keeps only the constraints that hold across ALL examples. Since we collected windows where position (1,1) = 4, that position will always be 4 in the final schema.
+
+### 3.5. Pattern Position Selection
+
+For each shape, multiple schema positions are generated (e.g., 9 positions for 3×3). The system automatically selects the **most structurally complex** position using this scoring:
+
+**Structure Score = Constraint Positions + (2 × Variable Relationships) + Variable Diversity**
+
+Where:
+- **Constraint Positions**: Number of non-wildcard positions (numbers + variables)
+- **Variable Relationships**: Extra occurrences of variables (X appearing 4 times = 3 relationships)  
+- **Variable Diversity**: Number of different variables (X, Y, Z = 3)
+
+#### Example: (3,3) Position Selection
+```
+Position (1,1): [*, X, *][X, 4, X][*, X, *]  → Score: 12 (5 constraints, 3 relationships, 1 var)
+Position (0,0): [4, X, *][X, *, *][Y, *, Y] → Score: 11 (5 constraints, 2 relationships, 2 vars)  
+Position (0,1): [X, 4, X][*, X, *][*, *, *] → Score: 9  (4 constraints, 2 relationships, 1 var)
+```
+
+**Winner: Position (1,1)** - The perfect cross pattern with maximum variable relationships.
 
 ### 4. Universal Matching
 
@@ -174,7 +194,8 @@ Example: `match_universal_pos(shape=(3,3)) |> OpUniformColorFromMatchesUniformNe
 ### Training Phase
 1. **Extract windows** around color 4 centers from all training inputs
 2. **Build universal schemas** by intersecting patterns across examples  
-3. **Test multiple shapes** (1×3, 3×1, 3×3, 5×5) to find the best patterns
+3. **Select best pattern position** for each shape based on structural complexity
+4. **Test multiple shapes** (1×3, 3×1, 2×3, 3×3, 5×5) using their optimal patterns
 
 ### Prediction Phase  
 1. **Apply universal matchers** to find all pattern occurrences in test input
@@ -185,8 +206,9 @@ Example: `match_universal_pos(shape=(3,3)) |> OpUniformColorFromMatchesUniformNe
 
 ### Found Programs
 The system discovers programs like:
-- `match_universal_pos(shape=(1, 3)) |> OpUniformColorFromMatchesUniformNeighborhood [✓ 1/1 test]`
-- `match_universal_pos(shape=(3, 3)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [✓ 1/1 test]`
+- `match_universal_pos(shape=(1, 3),pos=(0, 1)) |> OpUniformColorFromMatchesUniformNeighborhood [✓ 1/1 test]`
+- `match_universal_pos(shape=(2, 3),pos=(0, 1)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [✓ 1/1 test]`
+- `match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorFromMatchesExcludeGlobal(cross_only=True) [✓ 1/1 test]`
 
 The `[✓ 1/1 test]` indicator shows this program correctly predicts the test case.
 
@@ -197,7 +219,7 @@ The `[✓ 1/1 test]` indicator shows this program correctly predicts the test ca
 This mosaic shows:
 - **Left panels**: Input grids with yellow rectangles marking where patterns match
 - **Right panels**: The predicted output color
-- **Columns**: Different pattern shapes (1×3, 3×1, 3×3, 5×5)
+- **Columns**: Different pattern shapes (1×3, 3×1, 2×3, 3×3, 5×5)
 - **Rows**: Training and test examples
 
 ### Important Finding: Aggregator Sensitivity
@@ -259,15 +281,16 @@ python3 repro.py
 ### Customization
 To try different pattern shapes:
 ```python
-dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(3,3),(5,5)])
+dsl.enumerate_programs_for_task(task, universal_shapes=[(1,3),(3,1),(2,3),(3,3),(5,5)])
 ```
 
 ## Key Insights
 
 1. **Universal patterns** work across all training examples, making them robust
-2. **Multiple shapes** capture different types of spatial relationships  
-3. **Test indicators** (✓/✗) help distinguish reliable vs. overfitted programs
-4. **Aggregation strategy** is crucial - different tasks need different approaches
-5. **Aggregation strategy determines success**: The 5×5 example shows how the same valid patterns can succeed or fail depending on the aggregation method
+2. **Structural complexity selection** automatically identifies the most informative pattern position for each shape
+3. **Multiple shapes** capture different types of spatial relationships  
+4. **Test indicators** (✓/✗) help distinguish reliable vs. overfitted programs
+5. **Aggregation strategy** is crucial - different tasks need different approaches
+6. **Cross patterns emerge naturally**: Center positions (1,1) consistently yield the highest structural scores across shapes
 
 The core insight is that ARC tasks often have consistent local patterns, and by finding the intersection of these patterns across examples, we can build reliable predictors for new inputs. However, **perfect training accuracy does not guarantee the right solution** - test evaluation reveals which aggregation strategies truly generalize beyond the training data.
