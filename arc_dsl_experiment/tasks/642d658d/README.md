@@ -135,8 +135,20 @@ Match requires the full schema to fit within grid bounds.
 
 After finding all pattern matches, we need to decide on a single output color. Different **aggregators** use different strategies:
 
+**Important**: Aggregators only consider positions with actual constraints (numbers or variables). **Wildcard positions ("*") are completely ignored** during color aggregation.
+
+#### Example: Aggregation with Wildcards
+```
+Schema:    Matched Window:    Colors for Aggregation:
+[4 X *]  →  [4 2 7]        →  [4, 2] (ignores 7 from "*" position)
+[X * *]     [2 9 1]           [2] (ignores 9,1 from "*" positions)  
+[Y * Y]     [3 0 3]           [3, 3] (ignores 0 from "*" position)
+
+Final aggregation: [4, 2, 2, 3, 3] → mode = 2 or 3 (tie-breaking applies)
+```
+
 #### OpUniformColorFromMatches
-- Collect all colors from matched positions
+- Collect all colors from constraint positions (ignore "*" positions)
 - Return the most common (mode) color
 
 #### OpUniformColorFromMatchesExcludeGlobal  
