@@ -10,23 +10,7 @@ from __future__ import annotations
 from typing import List, Tuple, Callable, Dict
 import numpy as np
 from dsl_types.states import Operation, Grid, Center, Color, OpFailure
-
-
-def _cross4_vals_any(g: np.ndarray, r: int, c: int):
-    H,W = g.shape; vals=[]
-    if r-1>=0: vals.append(int(g[r-1,c]))
-    if r+1<H:  vals.append(int(g[r+1,c]))
-    if c-1>=0: vals.append(int(g[r,c-1]))
-    if c+1<W:  vals.append(int(g[r,c+1]))
-    return vals
-
-
-def _mode_int(values):
-    from collections import Counter
-    if not values: return 0
-    cnt = Counter(values); top = max(cnt.values())
-    cands = [v for v,c in cnt.items() if c==top]
-    return int(min(cands))
+from utils import mode_int
 
 
 def sel_color_uniform_cross_everywhere_mode(x_hat: np.ndarray) -> int:
@@ -39,7 +23,7 @@ def sel_color_uniform_cross_everywhere_mode(x_hat: np.ndarray) -> int:
     if not picks:
         vals, cnt = np.unique(g[g!=0], return_counts=True)
         return int(vals[np.argmax(cnt)]) if len(vals) else 0
-    return _mode_int(picks)
+    return mode_int(picks)
 
 
 def sel_color_argmax_uniform_cross_color_count(x_hat: np.ndarray) -> int:
@@ -75,7 +59,7 @@ def rule_h3_flank_mode(x_hat: np.ndarray) -> int:
     if not picks:
         vals, cnt = np.unique(g[g!=0], return_counts=True)
         return int(vals[np.argmax(cnt)]) if len(vals) else 0
-    return _mode_int(picks)
+    return mode_int(picks)
 
 
 def rule_v3_flank_mode(x_hat: np.ndarray) -> int:
@@ -95,7 +79,7 @@ def rule_v3_flank_mode(x_hat: np.ndarray) -> int:
     if not picks:
         vals, cnt = np.unique(g[g!=0], return_counts=True)
         return int(vals[np.argmax(cnt)]) if len(vals) else 0
-    return _mode_int(picks)
+    return mode_int(picks)
 
 
 def rule_best_center_cross_mode(x_hat: np.ndarray) -> int:
@@ -127,7 +111,7 @@ def rule_best_center_cross_mode(x_hat: np.ndarray) -> int:
                 best_colors = hits
     if best_hits <= 0:
         return 0
-    return _mode_int(best_colors)
+    return mode_int(best_colors)
 
 
 def rule_best_center_flank_mode(x_hat: np.ndarray) -> int:
@@ -166,7 +150,7 @@ def rule_best_center_flank_mode(x_hat: np.ndarray) -> int:
                 best_colors = hits
     if best_hits <= 0:
         return 0
-    return _mode_int(best_colors)
+    return mode_int(best_colors)
 
 
 # Center-choosers and center-conditioned outputs (for composition)
@@ -223,7 +207,7 @@ def out_mode_cross_for_center_33(x_hat: np.ndarray, c0: int) -> int:
         vals = [int(wv[1+dr,1+dc]) for (dr,dc) in _REL_CROSS_33]
         if len(set(vals))==1 and vals[0]!=0:
             cols.append(int(vals[0]))
-    return _mode_int(cols) if cols else 0
+    return mode_int(cols) if cols else 0
 
 
 def out_mode_flank_for_center(x_hat: np.ndarray, c0: int) -> int:
@@ -242,7 +226,7 @@ def out_mode_flank_for_center(x_hat: np.ndarray, c0: int) -> int:
                 a,b = int(g[r-1,c]), int(g[r+1,c])
                 if a==b and a!=0:
                     cols.append(a)
-    return _mode_int(cols) if cols else 0
+    return mode_int(cols) if cols else 0
 
 
 # Local-structure color rules

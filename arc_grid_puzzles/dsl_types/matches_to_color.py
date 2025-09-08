@@ -17,14 +17,7 @@ from __future__ import annotations
 from typing import List, Dict, Optional
 import numpy as np
 from dsl_types.states import Operation, Matches, Color
-
-
-def _mode_int(values):
-    from collections import Counter
-    if not values: return 0
-    cnt = Counter(values); top = max(cnt.values())
-    cands = [v for v,c in cnt.items() if c==top]
-    return int(min(cands))
+from utils import mode_int
 
 
 class OpUniformColorFromMatches(Operation[Matches, Color]):
@@ -47,7 +40,7 @@ class OpUniformColorFromMatches(Operation[Matches, Color]):
                         vals.append(vv)
         if not vals:
             return Color(0)
-        return Color(_mode_int(vals))
+        return Color(mode_int(vals))
 
 
 class OpUniformColorPerSchemaThenMode(Operation[Matches, Color]):
@@ -200,7 +193,7 @@ class OpUniformColorFromSchemaConstantsOnly(Operation[Matches, Color]):
                             vals.append(vv)
         if not vals:
             return Color(0)
-        return Color(_mode_int(vals))
+        return Color(mode_int(vals))
 
 
 class OpUniformColorFromMatchesExcludeGlobal(Operation[Matches, Color]):
@@ -261,7 +254,7 @@ class OpUniformColorFromMatchesExcludeGlobal(Operation[Matches, Color]):
                         vals_out.append(vv)
         if not vals_out:
             return Color(0)
-        return Color(_mode_int(vals_out))
+        return Color(mode_int(vals_out))
 
 
 # =============================================================================
