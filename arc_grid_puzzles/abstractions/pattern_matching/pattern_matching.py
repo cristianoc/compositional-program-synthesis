@@ -2,7 +2,7 @@
 # Pattern Matching - Consolidated Module
 # This module contains all pattern matching functionality:
 #  • Pattern mining for 1x3 windows and n×n signatures
-#  • Overlay detection and schema generation
+#  • Pattern detection and schema generation
 #  • Match data structures and utilities
 # -----------------------------------------------------------------------------
 
@@ -426,11 +426,11 @@ def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
         raise ValueError("grid must be 2-D")
     return g
 
-def _emit_overlay(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: int, overlay_id: int) -> dict:
+def _emit_pattern_match(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: int, pattern_id: int) -> dict:
     h = y2 - y1 + 1
     w = x2 - x1 + 1
     return {
-        "overlay_id": int(overlay_id),
+        "pattern_id": int(pattern_id),
         "center_row": int(center_r + 1),
         "center_col": int(center_c + 1),
         "y1": int(y1 + 1),
@@ -439,13 +439,13 @@ def _emit_overlay(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: i
         "x2": int(x2 + 1),
         "height": int(h),
         "width": int(w),
-        # For compatibility with vision overlays, we include numeric fields with neutral defaults
+        # For compatibility with vision patterns, we include numeric fields with neutral defaults
         "contrast": float(0.0),
         "peak_lum": float(0.0),
         "area": int(h * w),
     }
 
-def detect_pattern_overlays(
+def detect_pattern_matches(
     grid: Iterable[Iterable[int]],
     *,
     kind: PatternKind = "window_nxm",
@@ -455,17 +455,17 @@ def detect_pattern_overlays(
     window_shape: Optional[tuple[int, int]] = None,
 ) -> List[dict]:
     """
-    Detect overlays by simple pattern templates.
+    Detect pattern matches by simple pattern templates.
 
-    - kind="window_nxm": emit one overlay per center equal to the selected color with an (n×m) window clipped to the grid. Each overlay carries the window and its per-window schema.
+    - kind="window_nxm": emit one pattern match per center equal to the selected color with an (n×m) window clipped to the grid. Each pattern match carries the window and its per-window schema.
     """
     g = _to_np_grid(grid)
     H, W = g.shape
-    overlays: List[dict] = []
-    overlay_id = 1
+    pattern_matches: List[dict] = []
+    pattern_id = 1
 
     if kind == "window_nxm":
-        # One overlay per pixel equal to the given color,
+        # One pattern match per pixel equal to the given color,
         # with an n×m window centered at that pixel and clipped to the grid.
         if window_shape is None:
             hh, ww = 3, 3
@@ -509,7 +509,7 @@ def detect_pattern_overlays(
                     continue
                 y1 = max(0, r - up); x1 = max(0, c - left)
                 y2 = min(H - 1, r + down); x2 = min(W - 1, c + right)
-                ov = _emit_overlay(r, c, y1, x1, y2, x2, overlay_id)
+                ov = _emit_pattern_match(r, c, y1, x1, y2, x2, pattern_id)
                 win = g[y1 : y2 + 1, x1 : x2 + 1]
                 ov["window_h"] = int(win.shape[0])
                 ov["window_w"] = int(win.shape[1])
@@ -530,9 +530,9 @@ def detect_pattern_overlays(
                     mg = None
                 if mg is not None:
                     ov["match"] = mg
-                overlays.append(ov)
-                overlay_id += 1
-        return overlays
+                pattern_matches.append(ov)
+                pattern_id += 1
+        return pattern_matches
     else:
         raise ValueError(f"Unknown pattern kind: {kind}")
 

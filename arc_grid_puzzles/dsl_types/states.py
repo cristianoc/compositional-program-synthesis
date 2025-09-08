@@ -5,7 +5,7 @@
 #  • Matches: Pattern match results (see matches.py for details)
 #  • Color: Predicted output color
 #  • Center: Grid with identified center color
-#  • Overlay: Legacy overlay-based state
+#  • Overlay: Legacy pattern-based state (unused)
 #  • Operation framework and Pipeline
 # -----------------------------------------------------------------------------
 

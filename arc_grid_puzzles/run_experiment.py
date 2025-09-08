@@ -412,8 +412,8 @@ def main():
         
         images_dir = output_dir / "images"
         images_dir.mkdir(exist_ok=True)
-        render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"), found_abs_programs)
-        print("Wrote", images_dir / "overlay_mosaic.png")
+        render_mosaic_universal_all_examples(task, str(images_dir / "pattern_mosaic.png"), found_abs_programs)
+        print("Wrote", images_dir / "pattern_mosaic.png")
     except Exception as e:
         print("[warn] failed to render universal mosaic:", e)
 

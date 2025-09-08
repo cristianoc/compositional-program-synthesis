@@ -105,7 +105,7 @@ def enumerate_programs_for_task(
     """Enumerate programs for a task using pattern abstraction approaches."""
     import time
     
-    # Abstractions: enumerate universal fixed-schema pipelines only (no overlay-based seeds)
+    # Abstractions: enumerate universal fixed-schema pipelines only (no pattern-based seeds)
     shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = []
     
@@ -119,7 +119,7 @@ def enumerate_programs_for_task(
         OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
     ])
     # Add universal fixed-schema matchers derived from task (train+test) for requested shapes and center_value=4
-    # Reuse the same default shapes as PatternOverlayExtractor when not overridden
+    # Reuse the same default shapes as PatternExtractor when not overridden
     shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else list(shapes)
     matcher_seeds = 0
     for ushape in shapes_universal:
