@@ -19,15 +19,15 @@
       "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> OpUniformColorPerSchemaThenMode(cross_only=False) [\u2713 1/1 test]"
     ],
     "programs_found": 15,
-    "time_sec": 0.046028500015381724
+    "time_sec": 0.08681020798394457
   },
   "G": {
-    "nodes": 70,
+    "nodes": 6,
     "programs": [
       "compose(choose_cross_implied_33->out_cross_mode_33)",
       "compose(choose_cross_implied_33->out_flank_mode)"
     ],
     "programs_found": 2,
-    "time_sec": 0.0072409589774906635
+    "time_sec": 0.012829374987632036
   }
 }

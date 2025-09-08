@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Reproduction script for “Overlay abstraction vs. core G” experiment
+# Reproduction script for "Overlay abstraction vs. core G" experiment
 # This script:
 #  • Loads task.json and enumerates program spaces (G vs. Abstraction) and checks ALL train
 #  • Prints programs found & node counts/timings                            (README_clean.md §4)
@@ -14,16 +14,19 @@ from importlib import reload
 import sys
 from pathlib import Path
 
-# Ensure local imports resolve to this folder's dsl.py
+# Import from the reorganized structure
 HERE = Path(__file__).resolve().parent
-if str(HERE) not in sys.path:
-    sys.path.insert(0, str(HERE))
-import dsl
-dsl = reload(dsl)
+PROJECT_ROOT = HERE.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+# Import from generic modules
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from driver import enumerate_programs_for_task
+from dsl_types.states import Grid, Pipeline
+from dsl_types.grid_to_matches import OpMatchAnyUniversalSchemas
+from dsl_types.grid_to_center_to_color import G_TYPED_OPS
 
 TASK_PATH = str(HERE / "task.json")
-
-# Removed overlay-based predictors and color search
 
 
 def main():
@@ -31,15 +34,13 @@ def main():
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
 
     # Enumerate once: both G and ABS (ABS includes all universal shapes)
-    from importlib import reload
-    reload(dsl)
     SHAPES = [(1,3),(3,1),(2,3),(3,3),(5,5)]
-    res_once = dsl.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
+    res_once = enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     # Print and persist simple combined JSON
     programs_path = HERE / "programs_found.json"
     try:
-        # G nodes from DSL to reflect current COLOR_RULES length
-        g_nodes = len(dsl.COLOR_RULES)
+        # G nodes from generic G_TYPED_OPS
+        g_nodes = len(G_TYPED_OPS)
         abs_nodes = res_once['ABS']['nodes']
         print("=== Node counts ===")
         print(f"G core nodes: {g_nodes}")
@@ -74,7 +75,7 @@ def main():
 
     # Use single-pass stats from enumeration result
     stats = {
-        "G": {"nodes": len(dsl.COLOR_RULES), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
+        "G": {"nodes": len(G_TYPED_OPS), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
         "ABS": {"nodes": res_once['ABS']['nodes'], "programs_found": len(res_once['ABS']['programs']), "time_sec": res_once['ABS'].get('time_sec')},
     }
     print("\n=== STATS (single-pass) ===")
@@ -86,8 +87,9 @@ def main():
     # Print intersected universal schemas per shape (train+test)
     try:
         sprint("\n=== Intersected universal schemas (train+test) ===")
+        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
         for ushape in SHAPES:
-            uni = dsl.build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
+            uni = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
             if not uni:
                 sprint(f"shape {ushape}: none")
                 continue
@@ -247,8 +249,8 @@ def main():
             SCALE = 16
             base = upsample(grid_to_rgb(g), scale=SCALE)
             # collect matches using matcher only
-            pipe_match = dsl.Pipeline([dsl.OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})")])
-            mstate = pipe_match.run(dsl.GridState(g))
+            pipe_match = Pipeline([OpMatchAnyUniversalSchemas(schemas_list, label=f"match_universal_pos(shape={shape})")])
+            mstate = pipe_match.run(Grid(g))
             matches = getattr(mstate, 'matches', [])
             # Show all pattern matches (structural complexity selection provides quality control)
             for ov in sorted(matches, key=lambda ov: (ov["y1"], ov["x1"])):
@@ -302,7 +304,7 @@ def main():
             shape_to_schemas = {}   # shape -> schemas list for visualization
             
             for prog_name, seq in found_programs:
-                if len(seq) == 2 and isinstance(seq[0], dsl.OpMatchAnyUniversalSchemas):
+                if len(seq) == 2 and isinstance(seq[0], OpMatchAnyUniversalSchemas):
                     # Parse shape from matcher's label
                     label = getattr(seq[0], 'label', '')
                     if 'shape=' in label:
@@ -314,7 +316,7 @@ def main():
                                 shape_to_program[shape] = (seq[0], seq[1])
                                 # Extract schemas from the matcher (already properly typed)
                                 matcher = seq[0]
-                                if isinstance(matcher, dsl.OpMatchAnyUniversalSchemas):
+                                if isinstance(matcher, OpMatchAnyUniversalSchemas):
                                     shape_to_schemas[shape] = matcher.schemas
                                 else:
                                     shape_to_schemas[shape] = []
@@ -329,9 +331,9 @@ def main():
                 if shape not in shape_to_program:
                     return 0
                 matcher, aggregator = shape_to_program[shape]
-                pipe = dsl.Pipeline([matcher, aggregator])
+                pipe = Pipeline([matcher, aggregator])
                 try:
-                    out = pipe.run(dsl.GridState(np.asarray(g, dtype=int)))
+                    out = pipe.run(Grid(np.asarray(g, dtype=int)))
                     return int(getattr(out, 'color', 0))
                 except:
                     return 0
