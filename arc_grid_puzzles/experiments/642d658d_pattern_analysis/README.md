@@ -222,7 +222,7 @@ The `[✓ 1/1 test]` indicator shows this program correctly predicts the test ca
 
 ### Visual Results
 
-![](images/overlay_mosaic.png)
+![](images/pattern_mosaic.png)
 
 This mosaic shows:
 - **Left panels**: Input grids with yellow rectangles marking where the optimal patterns match
@@ -305,7 +305,7 @@ python run_642d658d.py
 ```
 
 ### Outputs
-- **Visual**: `results/images/overlay_mosaic.png` - Pattern matches and predictions
+- **Visual**: `results/images/pattern_mosaic.png` - Pattern matches and predictions
 - **Programs**: `results/programs_found.json` - All discovered programs with test results  
 - **Stats**: `results/repro_stats.json` - Performance metrics and timing
 
