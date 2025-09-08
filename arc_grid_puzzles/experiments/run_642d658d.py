@@ -148,7 +148,7 @@ def patched_main():
         # Import shared image utilities
         from image_utils import (
             PALETTE, YELLOW, grid_to_rgb, upsample, save_png, 
-            draw_rect_outline, draw_text, render_grid_image, render_single_cell_image
+            draw_rect_outline, draw_text, render_grid_image, render_single_cell_image, add_border
         )
         
         def build_panel_body(g, pred_color, shape: tuple[int,int], schemas_list) -> np.ndarray:
@@ -177,11 +177,6 @@ def patched_main():
                 base_panel = base
             out_panel = np.full((Hs, out_w, 3), 255, dtype=np.uint8)
             out_panel[0:SCALE, 0:SCALE, :] = PALETTE.get(int(pred_color), (0,0,0))
-            def add_border(img: np.ndarray, m: int = 8) -> np.ndarray:
-                h, w, _ = img.shape
-                bordered = np.full((h + 2*m, w + 2*m, 3), 255, dtype=np.uint8)
-                bordered[m:m+h, m:m+w, :] = img
-                return bordered
             base_panel_b = add_border(base_panel, 8)
             out_panel_b = add_border(out_panel, 8)
             bw = base_panel_b.shape[1]

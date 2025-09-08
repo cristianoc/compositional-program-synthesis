@@ -182,6 +182,14 @@ def render_grid_image(grid: np.ndarray, scale: int = 16,
     return upsample(rgb, scale)
 
 
+def add_border(img: np.ndarray, margin: int = 8) -> np.ndarray:
+    """Add a white border around an image."""
+    h, w, _ = img.shape
+    bordered = np.full((h + 2*margin, w + 2*margin, 3), 255, dtype=np.uint8)
+    bordered[margin:margin+h, margin:margin+w, :] = img
+    return bordered
+
+
 def render_single_cell_image(color: int, scale: int = 64,
                             palette: Dict[int, Tuple[int, int, int]] = PALETTE) -> np.ndarray:
     """Render a single color cell as a scaled RGB image."""
