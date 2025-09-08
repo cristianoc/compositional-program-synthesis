@@ -1,14 +1,14 @@
 # -----------------------------------------------------------------------------
-# Reproduction script for "Overlay abstraction vs. core G" experiment
+# Generic Experiment Runner for Pattern Abstraction
 # This script:
-#  • Loads task.json and enumerates program spaces (G vs. Abstraction) and checks ALL train
-#  • Prints programs found & node counts/timings                            (README_clean.md §4)
-#  • Renders annotated images (universal matches + predicted color)        (README_clean.md Figures)
-# No behavior changes are made; this is the exact harness used for results.
+#  • Loads any task.json and enumerates program spaces (G vs. Abstraction)
+#  • Prints programs found & node counts/timings
+#  • Renders annotated images (universal matches + predicted color)
+# Usage: python run_experiment.py <task_path>
+# Example: python run_experiment.py tasks/642d658d/task.json
 # -----------------------------------------------------------------------------
 
-
-import json, time, numpy as np, os
+import json, time, numpy as np, os, argparse
 from typing import Optional, Any, Union
 from importlib import reload
 import sys
@@ -18,26 +18,40 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROJECT_ROOT = HERE.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
-# Import from generic modules
-sys.path.insert(0, str(PROJECT_ROOT))
 
 from driver import enumerate_programs_for_task
 from dsl_types.states import Grid, Pipeline
 from dsl_types.grid_to_matches import OpMatchAnyUniversalSchemas
 from dsl_types.grid_to_center_to_color import G_TYPED_OPS
 
-TASK_PATH = str(HERE / "task.json")
-
 
 def main():
-    task = json.loads(Path(TASK_PATH).read_text())
+    parser = argparse.ArgumentParser(description='Run pattern abstraction experiment on ARC task')
+    parser.add_argument('task_path', help='Path to task.json file')
+    parser.add_argument('--output-dir', help='Output directory for results (default: same as task directory)')
+    args = parser.parse_args()
+    
+    task_path = Path(args.task_path)
+    if not task_path.exists():
+        print(f"Error: Task file not found: {task_path}")
+        sys.exit(1)
+    
+    task = json.loads(task_path.read_text())
     train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
+
+    # Determine output directory
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+    else:
+        output_dir = task_path.parent
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # Enumerate once: both G and ABS (ABS includes all universal shapes)
     SHAPES = [(1,3),(3,1),(2,3),(3,3),(5,5)]
     res_once = enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     # Print and persist simple combined JSON
-    programs_path = HERE / "programs_found.json"
+    programs_path = output_dir / "programs_found.json"
     try:
         # G nodes from generic G_TYPED_OPS
         g_nodes = len(G_TYPED_OPS)
@@ -410,6 +424,8 @@ def main():
         # Get found programs from enumeration results - use actual sequences (before JSON filtering)
         found_abs_programs = res_once["ABS"].get("program_sequences", [])
         
+        images_dir = output_dir / "images"
+        images_dir.mkdir(exist_ok=True)
         render_mosaic_universal_all_examples(task, str(images_dir / "overlay_mosaic.png"), found_abs_programs)
         print("Wrote", images_dir / "overlay_mosaic.png")
     except Exception as e:
