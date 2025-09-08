@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import List, Dict, Optional
 import numpy as np
 from dsl_types.states import Operation, Matches, Color
-from utils import mode_int
+from utils import mode_int, cross_positions
 
 
 class OpUniformColorFromMatches(Operation[Matches, Color]):
@@ -53,18 +53,7 @@ class OpUniformColorPerSchemaThenMode(Operation[Matches, Color]):
         self.cross_only = bool(cross_only)
 
     def _cross_positions(self, nr: int, nc: int):
-        if nr == 1 and nc == 3:
-            return [(0,0),(0,2)]
-        if nr == 3 and nc == 1:
-            return [(0,0),(2,0)]
-        ci, cj = nr//2, nc//2
-        if nr%2==1 and nc%2==1:
-            return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
-        if nr%2==1 and nc%2==0:
-            return [(ci, cj-1),(ci, cj)]
-        if nr%2==0 and nc%2==1:
-            return [(ci-1, cj),(ci, cj)]
-        return [(ci-1, cj-1),(ci-1, cj),(ci, cj-1),(ci, cj)]
+        return cross_positions(nr, nc)
 
     def apply(self, state: Matches) -> Color:
         from collections import defaultdict, Counter
@@ -206,18 +195,7 @@ class OpUniformColorFromMatchesExcludeGlobal(Operation[Matches, Color]):
         self.cross_only = bool(cross_only)
 
     def _cross_positions(self, nr: int, nc: int):
-        if nr == 1 and nc == 3:
-            return [(0,0),(0,2)]
-        if nr == 3 and nc == 1:
-            return [(0,0),(2,0)]
-        ci, cj = nr//2, nc//2
-        if nr%2==1 and nc%2==1:
-            return [(ci-1,cj),(ci+1,cj),(ci,cj-1),(ci,cj+1)]
-        if nr%2==1 and nc%2==0:
-            return [(ci, cj-1),(ci, cj)]
-        if nr%2==0 and nc%2==1:
-            return [(ci-1, cj),(ci, cj)]
-        return [(ci-1, cj-1),(ci-1, cj),(ci, cj-1),(ci, cj)]
+        return cross_positions(nr, nc)
 
     def apply(self, state: Matches) -> Color:
         g = state.grid
