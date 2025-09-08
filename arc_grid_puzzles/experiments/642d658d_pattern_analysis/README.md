@@ -22,6 +22,11 @@ This ARC (Abstraction and Reasoning Corpus) task requires finding the output col
 
 **The Goal:** Given the test input, predict the output color (a single color for the entire grid).
 
+### Task Data
+- **Task Definition**: `../../tasks/642d658d.json`
+- **Training Examples**: 3 input/output pairs
+- **Test Examples**: 1 input/output pair
+
 > **📊 Theoretical Analysis**: For a comprehensive analysis of the state space reduction and compositional program synthesis principles demonstrated by this implementation, see [`ABSTRACTION_ANALYSIS.md`](ABSTRACTION_ANALYSIS.md).
 
 ## Core Concepts
@@ -280,13 +285,18 @@ The system enumerates all possible **Matcher + Aggregator** combinations and kee
 
 ### Usage
 ```bash
-python3 repro.py
+# Self-discoverable experiment runner (no args needed)
+python run_642d658d.py
+
+# Or from the experiments directory
+cd experiments
+python run_642d658d.py
 ```
 
 ### Outputs
-- **Visual**: `images/overlay_mosaic.png` - Pattern matches and predictions
-- **Programs**: `programs_found.json` - All discovered programs with test results  
-- **Stats**: `repro_stats.json` - Performance metrics and timing
+- **Visual**: `results/images/overlay_mosaic.png` - Pattern matches and predictions
+- **Programs**: `results/programs_found.json` - All discovered programs with test results  
+- **Stats**: `results/repro_stats.json` - Performance metrics and timing
 
 ### Customization
 To try different pattern shapes:

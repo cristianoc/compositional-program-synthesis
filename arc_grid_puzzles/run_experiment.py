@@ -8,7 +8,7 @@
 # Example: python run_experiment.py experiments/642d658d/task.json
 # -----------------------------------------------------------------------------
 
-import json, time, numpy as np, os, argparse
+import json, numpy as np, os, argparse
 from typing import Optional, Any, Union
 from importlib import reload
 import sys
@@ -76,10 +76,13 @@ def main():
         else:
             print("(none)")
 
-        # Save JSON without program sequences (which aren't JSON serializable)
-        json_output = {k: v for k, v in res_once.items()}
-        if "ABS" in json_output and "program_sequences" in json_output["ABS"]:
-            json_output["ABS"] = {k: v for k, v in json_output["ABS"].items() if k != "program_sequences"}
+        # Save JSON without program sequences and timing (which aren't JSON serializable or change every run)
+        json_output = {}
+        for k, v in res_once.items():
+            json_output[k] = {}
+            for subk, subv in v.items():
+                if subk not in ["program_sequences", "time_sec"]:
+                    json_output[k][subk] = subv
         
         with open(programs_path, "w", encoding="utf-8") as f:
             json.dump(json_output, f, indent=2, sort_keys=True)
@@ -87,36 +90,31 @@ def main():
     except Exception as e:
         print("[warn] failed to write programs_found.json:", e)
 
-    # Use single-pass stats from enumeration result
-    stats = {
+    # Print single-pass stats from enumeration result
+    print("\n=== STATS (single-pass) ===")
+    print({
         "G": {"nodes": len(G_TYPED_OPS), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
         "ABS": {"nodes": res_once['ABS']['nodes'], "programs_found": len(res_once['ABS']['programs']), "time_sec": res_once['ABS'].get('time_sec')},
-    }
-    print("\n=== STATS (single-pass) ===")
-    print(stats)
-    # Prepare capture for schema output
-    def sprint(msg: str = ""):
-        print(msg)
-
+    })
     # Print intersected universal schemas per shape (train+test)
     try:
-        sprint("\n=== Intersected universal schemas (train+test) ===")
+        print("\n=== Intersected universal schemas (train+test) ===")
         from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
         for ushape in SHAPES:
             uni = build_intersected_universal_schemas_for_task(task, window_shape=tuple(ushape), center_value=4, splits=("train","test"))
             if not uni:
-                sprint(f"shape {ushape}: none")
+                print(f"shape {ushape}: none")
                 continue
-            sprint(f"shape {ushape}: {len(uni)} positions")
+            print(f"shape {ushape}: {len(uni)} positions")
             for pos, sc in sorted(uni.items()):
-                sprint(f"pos {pos}")
+                print(f"pos {pos}")
                 cells = [str(x) for row in sc for x in row]
                 w = max((len(c) for c in cells), default=1)
                 for row in sc:
-                    sprint(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
-                sprint()
+                    print(" " + "[" + ", ".join(f"{str(x):>{w}}" for x in row) + "]")
+                print()
     except Exception as e:
-        sprint(f"[warn] failed to print universal schemas: {e}")
+        print(f"[warn] failed to print universal schemas: {e}")
 
     # Mosaic visualization using actual found programs
 

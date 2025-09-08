@@ -17,7 +17,12 @@ Open `compositional_abstractions.pdf` to read the full research note.
 
 ### Running Experiments
 ```bash
-python dsl.py
+# Run a specific experiment (self-discoverable, no args needed)
+cd experiments
+python run_642d658d.py
+
+# Or run the generic experiment runner
+python run_experiment.py experiments/642d658d/task.json
 ```
 
 ### Compiling LaTeX
