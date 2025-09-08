@@ -21,7 +21,7 @@
     "programs_found": 15
   },
   "G": {
-    "nodes": 6,
+    "nodes": 3,
     "programs": [
       "compose(choose_cross_implied_33->out_cross_mode_33)",
       "compose(choose_cross_implied_33->out_flank_mode)"

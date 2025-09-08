@@ -26,6 +26,7 @@ This ARC (Abstraction and Reasoning Corpus) task requires finding the output col
 - **Task Definition**: `../../tasks/642d658d.json`
 - **Training Examples**: 3 input/output pairs
 - **Test Examples**: 1 input/output pair
+- **Task-Specific Operations**: `task_specific_ops.py` - Contains G operations specific to 642d658d patterns
 
 > **📊 Theoretical Analysis**: For a comprehensive analysis of the state space reduction and compositional program synthesis principles demonstrated by this implementation, see [`ABSTRACTION_ANALYSIS.md`](ABSTRACTION_ANALYSIS.md).
 
@@ -261,6 +262,16 @@ The 5×5 results reveal a critical insight about the interaction between pattern
 This demonstrates that **the "right" solution depends on both finding good patterns AND choosing the right way to aggregate the results**. Test performance indicators (✓/✗) are essential for identifying which aggregation strategies generalize beyond training data.
 
 ## Technical Implementation
+
+### Task-Specific Operations
+
+This experiment uses task-specific G operations that are tailored to the patterns found in 642d658d:
+
+- **`choose_cross_implied_33`**: Selects centers based on 3×3 cross patterns with implied symmetry
+- **`out_cross_mode_33`**: Outputs color based on cross pattern analysis in 3×3 windows  
+- **`out_flank_mode`**: Outputs color based on flanking pattern analysis
+
+These operations are defined in `task_specific_ops.py` and are not part of the general DSL, ensuring that task-specific logic doesn't pollute the general-purpose operations.
 
 ### Core Operations
 

@@ -22,7 +22,7 @@ from dsl_types.matches_to_color import (
     OpUniformColorPerSchemaThenMode,
     OpUniformColorFromMatchesExcludeGlobal
 )
-from dsl_types.grid_to_center_to_color import G_TYPED_OPS, COLOR_RULES_BASE
+from dsl_types.grid_to_center_to_color import COLOR_RULES_BASE
 
 
 def _enumerate_typed_programs(
@@ -101,7 +101,8 @@ def enumerate_programs_for_task(
     num_preops: int = 200, 
     seed: int = 11, 
     *, 
-    universal_shapes: Optional[List[tuple[int,int]]] = None
+    universal_shapes: Optional[List[tuple[int,int]]] = None,
+    g_operations: Optional[List[Operation]] = None
 ) -> Dict[str, Any]:
     """Enumerate programs for a task using both G core and pattern abstraction approaches."""
     import time
@@ -109,7 +110,10 @@ def enumerate_programs_for_task(
     # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
     # G typed ops (choose -> out)
     t0 = time.perf_counter()
-    winners_g = _enumerate_typed_programs(task, G_TYPED_OPS, max_depth=2, min_depth=2, start_type=Grid, end_type=Color)
+    if g_operations is None:
+        # Default: no G operations (empty list)
+        g_operations = []
+    winners_g = _enumerate_typed_programs(task, g_operations, max_depth=2, min_depth=2, start_type=Grid, end_type=Color)
     t1 = time.perf_counter()
     programs_G = []
     for name, _ in winners_g:
@@ -122,7 +126,7 @@ def enumerate_programs_for_task(
                 programs_G.append(name)
         else:
             programs_G.append(name)
-    total_G = len(COLOR_RULES_BASE)
+    total_G = len(g_operations)
 
     # Abstractions: enumerate universal fixed-schema pipelines only (no overlay-based seeds)
     shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]

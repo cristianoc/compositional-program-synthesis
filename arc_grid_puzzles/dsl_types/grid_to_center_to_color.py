@@ -215,47 +215,6 @@ def choose_center_cross_implied_33(x_hat: np.ndarray) -> int:
     return best_c if best_n>0 else 0
 
 
-def choose_center_best_flank(x_hat: np.ndarray) -> int:
-    g = np.asarray(x_hat, dtype=int)
-    H, W = g.shape
-    best_c = 0
-    best_hits = -1
-    for c0 in range(1,10):
-        hits = 0
-        for r in range(H):
-            for c in range(W):
-                if int(g[r,c]) != c0:
-                    continue
-                if c-1>=0 and c+1<W:
-                    a,b = int(g[r,c-1]), int(g[r,c+1])
-                    if a==b and a!=0:
-                        hits+=1
-                if r-1>=0 and r+1<H:
-                    a,b = int(g[r-1,c]), int(g[r+1,c])
-                    if a==b and a!=0:
-                        hits+=1
-        if hits>best_hits or (hits==best_hits and c0<best_c):
-            best_hits = hits; best_c = c0
-    return best_c if best_hits>0 else 0
-
-
-def choose_center_best_cross(x_hat: np.ndarray) -> int:
-    g = np.asarray(x_hat, dtype=int)
-    H, W = g.shape
-    best_c = 0
-    best_hits = -1
-    for c0 in range(1,10):
-        wins = _collect_full_33_windows_for_center(g, c0)
-        hits = 0
-        for wv in wins:
-            vals = [int(wv[1+dr,1+dc]) for (dr,dc) in _REL_CROSS_33]
-            if len(set(vals))==1 and vals[0]!=0:
-                hits+=1
-        if hits>best_hits or (hits==best_hits and c0<best_c):
-            best_hits = hits; best_c = c0
-    return best_c if best_hits>0 else 0
-
-
 def out_mode_cross_for_center_33(x_hat: np.ndarray, c0: int) -> int:
     g = np.asarray(x_hat, dtype=int)
     wins = _collect_full_33_windows_for_center(g, c0)
@@ -286,72 +245,6 @@ def out_mode_flank_for_center(x_hat: np.ndarray, c0: int) -> int:
     return _mode_int(cols) if cols else 0
 
 
-# Typed operation wrappers for G composition (choose -> out)
-class OpChooseCenterCrossImplied33(Operation[Grid, Center]):
-    input_type = Grid
-    output_type = Center
-
-    label = "choose_cross_implied_33"
-
-    def apply(self, state: Grid) -> Center:
-        c = int(choose_center_cross_implied_33(state.grid))
-        if c == 0:
-            raise OpFailure("choose_cross_implied_33 failed: no center")
-        return Center(state.grid, c)
-
-
-class OpChooseCenterBestFlank(Operation[Grid, Center]):
-    input_type = Grid
-    output_type = Center
-
-    label = "choose_best_flank"
-
-    def apply(self, state: Grid) -> Center:
-        c = int(choose_center_best_flank(state.grid))
-        if c == 0:
-            raise OpFailure("choose_best_flank failed: no center")
-        return Center(state.grid, c)
-
-
-class OpChooseCenterBestCross(Operation[Grid, Center]):
-    input_type = Grid
-    output_type = Center
-
-    label = "choose_best_cross"
-
-    def apply(self, state: Grid) -> Center:
-        c = int(choose_center_best_cross(state.grid))
-        if c == 0:
-            raise OpFailure("choose_best_cross failed: no center")
-        return Center(state.grid, c)
-
-
-class OpOutCrossModeForCenter33(Operation[Center, Color]):
-    input_type = Center
-    output_type = Color
-
-    label = "out_cross_mode_33"
-
-    def apply(self, state: Center) -> Color:
-        y = int(out_mode_cross_for_center_33(state.grid, state.center_color))
-        if y == 0:
-            raise OpFailure("out_cross_mode_33 failed: no color")
-        return Color(y)
-
-
-class OpOutFlankModeForCenter(Operation[Center, Color]):
-    input_type = Center
-    output_type = Color
-
-    label = "out_flank_mode"
-
-    def apply(self, state: Center) -> Color:
-        y = int(out_mode_flank_for_center(state.grid, state.center_color))
-        if y == 0:
-            raise OpFailure("out_flank_mode failed: no color")
-        return Color(y)
-
-
 # Local-structure color rules
 COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("uniform_cross_everywhere_mode", sel_color_uniform_cross_everywhere_mode),
@@ -362,12 +255,3 @@ COLOR_RULES_BASE: List[Tuple[str, Callable[[np.ndarray], int]]] = [
     ("v3_flank_mode", rule_v3_flank_mode),
 ]
 
-# Explicit op registries (for documentation and composition seeding)
-# G ops: typed, fixed arity
-G_TYPED_OPS: List[Operation] = [
-    OpChooseCenterCrossImplied33(),
-    OpChooseCenterBestFlank(),
-    OpChooseCenterBestCross(),
-    OpOutCrossModeForCenter33(),
-    OpOutFlankModeForCenter(),
-]

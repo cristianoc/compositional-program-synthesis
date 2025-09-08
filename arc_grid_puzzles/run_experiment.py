@@ -22,7 +22,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from driver import enumerate_programs_for_task
 from dsl_types.states import Grid, Pipeline
 from dsl_types.grid_to_matches import OpMatchAnyUniversalSchemas
-from dsl_types.grid_to_center_to_color import G_TYPED_OPS
 
 
 def main():
@@ -49,12 +48,12 @@ def main():
 
     # Enumerate once: both G and ABS (ABS includes all universal shapes)
     SHAPES = [(1,3),(3,1),(2,3),(3,3),(5,5)]
-    res_once = enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
+    res_once = enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES, g_operations=[])
     # Print and persist simple combined JSON
     programs_path = output_dir / "programs_found.json"
     try:
-        # G nodes from generic G_TYPED_OPS
-        g_nodes = len(G_TYPED_OPS)
+        # Get node counts from the enumeration result
+        g_nodes = res_once['G']['nodes']
         abs_nodes = res_once['ABS']['nodes']
         print("=== Node counts ===")
         print(f"G core nodes: {g_nodes}")
@@ -93,7 +92,7 @@ def main():
     # Print single-pass stats from enumeration result
     print("\n=== STATS (single-pass) ===")
     print({
-        "G": {"nodes": len(G_TYPED_OPS), "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
+        "G": {"nodes": res_once['G']['nodes'], "programs_found": len(res_once['G']['programs']), "time_sec": res_once['G'].get('time_sec')},
         "ABS": {"nodes": res_once['ABS']['nodes'], "programs_found": len(res_once['ABS']['programs']), "time_sec": res_once['ABS'].get('time_sec')},
     })
     # Print intersected universal schemas per shape (train+test)
