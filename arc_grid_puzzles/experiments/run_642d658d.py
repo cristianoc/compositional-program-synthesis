@@ -87,6 +87,25 @@ def patched_main():
     else:
         print("(none)")
     
+    # Print intersected universal schemas per shape (train+test) in nice 2D format
+    try:
+        print("\n=== Intersected universal schemas (train+test) ===")
+        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
+        for ushape in SHAPES:
+            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
+            if uni_schemas:
+                print(f"shape {ushape}: {len(uni_schemas)} positions")
+                for pos, schema in uni_schemas.items():
+                    print(f"pos {pos}")
+                    # Convert schema to nice 2D text representation
+                    schema_text = []
+                    for row in schema:
+                        schema_text.append(" ".join(str(cell) for cell in row))
+                    for line in schema_text:
+                        print("", line)
+    except Exception as e:
+        print("[warn] failed to print universal schemas:", e)
+    
     # Save combined results
     programs_path = output_dir / "programs_found.json"
     try:
@@ -109,20 +128,6 @@ def patched_main():
         "G": {"nodes": g_results['nodes'], "programs_found": len(g_results['programs']), "time_sec": g_results.get('time_sec')},
         "ABS": {"nodes": abs_results['ABS']['nodes'], "programs_found": len(abs_results['ABS']['programs']), "time_sec": abs_results['ABS'].get('time_sec')},
     })
-    
-    # Print intersected universal schemas per shape (train+test)
-    try:
-        print("\n=== Intersected universal schemas (train+test) ===")
-        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
-        for ushape in SHAPES:
-            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
-            if uni_schemas:
-                print(f"shape {ushape}: {len(uni_schemas)} positions")
-                for pos, schema in uni_schemas.items():
-                    print(f"pos {pos}")
-                    print("", schema)
-    except Exception as e:
-        print("[warn] failed to print universal schemas:", e)
     
     # Generate images
     try:

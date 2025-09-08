@@ -1,9 +1,8 @@
 # -----------------------------------------------------------------------------
-# Generic Driver for Pattern Abstraction Experiments
-# This module provides:
-#  • Generic enumeration engine for typed operations
+# Program Search Engine
+# This module provides the core program search functionality:
+#  • Generic search engine for typed operation sequences
 #  • Program composition and evaluation utilities
-#  • Results collection and reporting
 #  • Task-agnostic pattern abstraction framework
 # -----------------------------------------------------------------------------
 
@@ -141,106 +140,7 @@ def enumerate_programs_for_task(
     t1 = time.perf_counter()
     programs_ABS = []
     
-    # Evaluate each found program on test cases
-    test_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["test"]]
-    
     for name, seq in winners_abs:
-        # Pretty-print sequences in a readable, parameterized style
-        if len(seq) == 2 and isinstance(seq[0], OpMatchAnyUniversalSchemas) and isinstance(seq[1], tuple(MATCHES_TO_COLOR_OPERATIONS)):
-            m0 = seq[0]
-            agg = seq[1]
-            aggname = agg.__class__.__name__
-            
-            # Add parameter info for parameterized aggregators to avoid duplicates
-            if isinstance(agg, OpUniformColorFromMatchesExcludeGlobal) and getattr(agg, 'cross_only', False):
-                aggname += "(cross_only=True)"
-            elif isinstance(agg, OpUniformColorPerSchemaThenMode) and not getattr(agg, 'cross_only', True):
-                aggname += "(cross_only=False)"
-            
-            prog_name = f"{getattr(m0,'label','match_fixed_schema')} |> {aggname}"
-        else:
-            # Fallback: use labels
-            prog_name = name
-        
-        # Evaluate on test
-        test_correct = 0
-        test_preds = []
-        for x, y in test_pairs:
-            try:
-                state: State = Grid(x)
-                for op in seq:
-                    state = op.apply(state)  # type: ignore[arg-type]
-                assert isinstance(state, Color)
-                pred = int(state.color)
-                test_preds.append(pred)
-                if pred == y:
-                    test_correct += 1
-            except Exception:
-                test_preds.append(-1)  # Error marker
-        
-        test_status = "✓" if test_correct == len(test_pairs) else "✗"
-        # Single programs list with test indicators (eliminates redundancy)
-        programs_ABS.append(f"{prog_name} [{test_status} {test_correct}/{len(test_pairs)} test]")
+        programs_ABS.append(name)
 
-    return {"ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t1 - t0), "program_sequences": winners_abs}}
-
-
-def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
-    """Pretty-prints the programs and node counts."""
-    res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)
-    print("=== Node counts ===")
-    print(f"Overlay+predicate nodes: {res['ABS']['nodes']}")
-    print("\n=== Programs found (overlay abstraction + pattern check) ===")
-    if res["ABS"]["programs"]:
-        for s in res["ABS"]["programs"]: print("-", s)
-    else:
-        print("(none)")
-    return res
-
-
-def measure_spaces(task: Dict, num_preops: int = 200, seed: int = 11):
-    """Measure the search spaces for both G and abstraction approaches."""
-    import time
-    train_pairs = [(np.array(ex["input"], dtype=int), int(ex["output"][0][0])) for ex in task["train"]]
-    # G (no pre-ops)
-    t0=time.perf_counter(); valid_G=[]; tried=0; tries_first=None; found=False
-    for cn, cf in COLOR_RULES_BASE:
-        tried+=1; ok=True
-        for x,y in train_pairs:
-            if int(cf(x)) != y: ok=False; break
-        if ok:
-            valid_G.append(cn)
-            if not found: tries_first=tried; found=True
-    t1=time.perf_counter()
-    # ABS (typed enumeration including schema matching chains)
-    t2=time.perf_counter()
-    shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
-    abs_ops: List[Operation] = []
-    
-    # Add all operations from registry
-    for op_class in MATCHES_TO_COLOR_OPERATIONS:
-        abs_ops.append(op_class())
-    
-    # Add parameterized variants
-    abs_ops.extend([
-        OpUniformColorPerSchemaThenMode(cross_only=False),
-        OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
-    ])
-    for ushape in shapes:
-        try:
-            uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
-            if uni_schemas:
-                # Select best pattern position based on structural complexity
-                best_pos, best_schema = select_best_pattern_position(uni_schemas)
-                abs_ops.append(OpMatchAnyUniversalSchemas([best_schema], label=f"match_universal_pos(shape={tuple(ushape)},pos={best_pos})"))
-        except Exception:
-            pass
-    winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=Grid, end_type=Color)
-    t3=time.perf_counter()
-    nodes_abs = 3  # one matcher seed per shape (default shapes)
-    return {
-        "G":{"nodes": len(COLOR_RULES_BASE), "programs_found": len(valid_G),
-             "tries_to_first": tries_first, "time_sec": t1-t0},
-        "ABS":{"nodes": nodes_abs, "programs_found": len(winners_abs),
-               "tries_to_first": None, "time_sec": t3-t2},
-    }
+    return {"ABS": {"nodes": total_ABS, "programs": programs_ABS, "programs_found": len(winners_abs), "time_sec": (t1 - t0), "program_sequences": winners_abs}}

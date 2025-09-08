@@ -66,7 +66,7 @@ G_TYPED_OPS_642D658D = [
 
 def enumerate_g_programs(task):
     """Enumerate G programs using task-specific operations."""
-    from driver import _enumerate_typed_programs
+    from program_search import _enumerate_typed_programs
     from dsl_types.states import Grid, Center, Color
     import time
     
