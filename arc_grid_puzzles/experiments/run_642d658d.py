@@ -118,7 +118,11 @@ def patched_main():
     # Generate images
     try:
         print("\n=== Generating images ===")
-        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
+        from dsl_types.grid_to_matches import (
+            build_intersected_universal_schemas_for_task,
+            select_best_pattern_position,
+            OpMatchAnyUniversalSchemas,
+        )
         from dsl_types.matches_to_color import OpUniformColorFromMatchesExcludeGlobal
         from dsl_types.states import Grid, Pipeline
         import numpy as np
@@ -140,14 +144,28 @@ def patched_main():
             draw_rect_outline, draw_text, render_grid_image, render_single_cell_image, add_border
         )
         
-        def build_panel_body(g, pred_color, shape: tuple[int,int], schemas_list) -> np.ndarray:
+        def build_panel_body(g, pred_color, shape: tuple[int,int], schema) -> np.ndarray:
             # Use original detect_overlays approach (matching original repro.py)
             g = np.asarray(g, dtype=int)
             SCALE = 8
             base = upsample(grid_to_rgb(g), scale=SCALE)
             
-            # Use original overlay detection approach
-            overlays = detect_pattern_matches(g.tolist(), color=4, window_shape=shape)
+            # For mosaic rendering, relax the "center==4" constraint by matching universal schemas anywhere
+            overlays = []
+            if schema is not None:
+                try:
+                    from dsl_types.states import Grid as GridState
+                    matcher = OpMatchAnyUniversalSchemas([schema])
+                    ms = matcher.apply(GridState(g))
+                    for m in ms.matches:
+                        overlays.append({
+                            "y1": m["y1"], "x1": m["x1"], "y2": m["y2"], "x2": m["x2"],
+                        })
+                except Exception:
+                    overlays = []
+            if not overlays:
+                # Fallback to original centered detection
+                overlays = detect_pattern_matches(g.tolist(), color=4, window_shape=shape)
             
             # Show overlays (matching original approach)
             for ov in sorted(overlays, key=lambda ov: (ov["y1"], ov["x1"])):
@@ -191,8 +209,19 @@ def patched_main():
             return np.concatenate([base_panel_b, spacer, out_panel_b], axis=1)
         
         def render_mosaic_universal_all_examples(task, out_path: str, found_programs):
-            # Use original shapes (matching original structure)
-            shapes = [(1,3),(3,1),(3,3)]
+            # Show overlays for all enumerated shapes
+            shapes = [(1,3),(3,1),(2,3),(3,3),(5,5)]
+
+            # Pre-compute best universal schema per shape (train+test) for mosaic overlays
+            shape_to_schema = {}
+            for shp in shapes:
+                try:
+                    uni = build_intersected_universal_schemas_for_task(task, window_shape=shp, center_value=4, splits=("train","test"))
+                    if uni:
+                        best_pos, best_schema = select_best_pattern_position(uni)
+                        shape_to_schema[shp] = best_schema
+                except Exception:
+                    continue
 
             # Choose aggregator: use original predict_with_pattern_kind approach
             def predict_for_grid(g, shape):
@@ -222,20 +251,23 @@ def patched_main():
             # Build rows (matching original structure)
             rows = []
             row_labels = []
-            kinds = [("1x3", (1,3)), ("3x1", (3,1)), ("WINDOW", (3,3))]
+            def _label_for_shape(shp: tuple[int,int]) -> str:
+                r, c = shp
+                return f"{r}x{c}"
+            kinds = [(_label_for_shape(s), s) for s in shapes]
             for idx, ex in enumerate(task["train"], start=1):
                 g = np.array(ex["input"], dtype=int)
                 pan = []
                 for _, shape in kinds:
                     pred = predict_for_grid(g, shape)
-                    pan.append(build_panel_body(g, pred, shape, None))
+                    pan.append(build_panel_body(g, pred, shape, shape_to_schema.get(shape)))
                 rows.append(pan); row_labels.append(f"TRAIN {idx}")
             for idx, ex in enumerate(task["test"], start=1):
                 g = np.array(ex["input"], dtype=int)
                 pan = []
                 for _, shape in kinds:
                     pred = predict_for_grid(g, shape)
-                    pan.append(build_panel_body(g, pred, shape, None))
+                    pan.append(build_panel_body(g, pred, shape, shape_to_schema.get(shape)))
                 rows.append(pan); row_labels.append(f"TEST {idx}")
 
             # Equalize panel widths per column
