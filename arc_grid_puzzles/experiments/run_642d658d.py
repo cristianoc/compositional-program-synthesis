@@ -150,7 +150,7 @@ def patched_main():
             overlays = detect_pattern_matches(g.tolist(), kind="window_nxm", color=4, window_shape=shape)
             
             # Show overlays (matching original approach)
-            for ov in sorted(overlays, key=lambda ov: (ov["center_row"], ov["center_col"])):
+            for ov in sorted(overlays, key=lambda ov: (ov["y1"], ov["x1"])):
                 y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
                 draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
             # Compose predicted color panel at right, same as original
@@ -204,9 +204,12 @@ def patched_main():
                 # Simple prediction: take the mode color from all overlay centers
                 colors = []
                 for ov in overlays:
-                    center_r, center_c = ov["center_row"], ov["center_col"]
-                    if 0 <= center_r < len(g) and 0 <= center_c < len(g[0]):
-                        colors.append(g[center_r][center_c])
+                    # Use the detection anchor position (where pattern was found)
+                    y1, x1, y2, x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                    # The detection anchor is at the top-left of the bounding box
+                    anchor_y, anchor_x = y1, x1
+                    if 0 <= anchor_y < len(g) and 0 <= anchor_x < len(g[0]):
+                        colors.append(g[anchor_y][anchor_x])
                 
                 if not colors:
                     return 0

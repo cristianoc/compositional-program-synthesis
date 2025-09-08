@@ -20,8 +20,6 @@ def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
 
 def _emit_pattern_match(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: int, pattern_id: int) -> dict:
     return {
-        "center_row": int(center_r + 1),
-        "center_col": int(center_c + 1),
         "y1": int(y1 + 1),
         "x1": int(x1 + 1),
         "y2": int(y2 + 1),
