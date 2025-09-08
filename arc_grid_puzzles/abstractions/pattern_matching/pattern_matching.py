@@ -19,22 +19,13 @@ def _to_np_grid(grid: Iterable[Iterable[int]]) -> np.ndarray:
     return g
 
 def _emit_pattern_match(center_r: int, center_c: int, y1: int, x1: int, y2: int, x2: int, pattern_id: int) -> dict:
-    h = y2 - y1 + 1
-    w = x2 - x1 + 1
     return {
-        "pattern_id": int(pattern_id),
         "center_row": int(center_r + 1),
         "center_col": int(center_c + 1),
         "y1": int(y1 + 1),
         "x1": int(x1 + 1),
         "y2": int(y2 + 1),
         "x2": int(x2 + 1),
-        "height": int(h),
-        "width": int(w),
-        # For compatibility with vision patterns, we include numeric fields with neutral defaults
-        "contrast": float(0.0),
-        "peak_lum": float(0.0),
-        "area": int(h * w),
     }
 
 def detect_pattern_matches(
