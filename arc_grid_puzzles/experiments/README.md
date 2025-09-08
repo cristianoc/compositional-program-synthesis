@@ -52,3 +52,29 @@ The runner automatically:
 ## Available Experiments
 
 - **642d658d** - Universal pattern matching with cross patterns
+
+## Dataset-wide Evaluation
+
+The `arc_agi_evaluation` suite provides dataset-wide runners:
+
+- Pattern analysis over all tasks:
+  ```bash
+  cd experiments/arc_agi_evaluation
+  python run_pattern_analysis_all.py \
+    --dataset all --split all \
+    --shapes 1x3 3x1 3x3 \
+    --limit 50
+  ```
+  Outputs: `arc_agi_pattern_analysis_results.json`
+
+- Solver run over all tasks:
+  ```bash
+  cd experiments/arc_agi_evaluation
+  python run_solve_all.py \
+    --dataset arc_agi_2 --split evaluation \
+    --shapes 1x3 3x1 3x3 \
+    --limit 50
+  ```
+  Outputs: `arc_agi_all_results.json`
+
+For full CLI options and defaults, see `experiments/arc_agi_evaluation/README.md`.

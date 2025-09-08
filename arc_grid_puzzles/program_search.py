@@ -7,22 +7,26 @@
 # -----------------------------------------------------------------------------
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Optional, Callable, Type, Any
+from typing import Dict, List, Tuple, Optional, Type, Any
 import numpy as np
 import time
-from dsl_types.states import Operation, State, Grid, Color, Pipeline
+from dsl_types.states import Operation, State, Grid, Color
 from dsl_types.grid_to_matches import (
     OpMatchAnyUniversalSchemas, 
     build_intersected_universal_schemas_for_task,
-    select_best_pattern_position
+    select_best_pattern_position,
+    schema_is_admissible_mixed
 )
 from dsl_types.matches_to_color import (
     HEURISTIC_MATCHES_TO_COLOR_OPERATIONS,
     OpUniformColorPerSchemaThenMode,
     OpUniformColorFromMatchesExcludeGlobal
 )
-from dsl_types.grid_to_center_to_color import COLOR_RULES_BASE
+ 
 
+
+# Default shapes used across experiments for universal schema extraction
+DEFAULT_UNIVERSAL_SHAPES: List[tuple[int,int]] = [(1, 3), (3, 1), (3, 3)]
 
 def _enumerate_typed_programs(
     task: Dict,
@@ -53,7 +57,6 @@ def _enumerate_typed_programs(
 
     winners: List[Tuple[str, List[Operation]]] = []
     # Simple DFS over sequences up to max_depth
-    from itertools import product
     # Expand sequences by chaining type-compatible ops
     def extend(seq: List[Operation]) -> List[List[Operation]]:
         outs: List[List[Operation]] = []
@@ -103,10 +106,8 @@ def enumerate_programs_for_task(
     universal_shapes: Optional[List[tuple[int,int]]] = None
 ) -> Dict[str, Any]:
     """Enumerate programs for a task using pattern abstraction approaches."""
-    import time
     
     # Abstractions: enumerate universal fixed-schema pipelines only (no pattern-based seeds)
-    shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = []
     
     # Add all heuristic operations from simple list
@@ -119,8 +120,8 @@ def enumerate_programs_for_task(
         OpUniformColorFromMatchesExcludeGlobal(cross_only=True),
     ])
     # Add universal fixed-schema matchers derived from task (train+test) for requested shapes and center_value=4
-    # Reuse the same default shapes as PatternExtractor when not overridden
-    shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else list(shapes)
+    # Reuse the same default shapes across the codebase when not overridden
+    shapes_universal: List[tuple[int,int]] = list(universal_shapes) if universal_shapes is not None else list(DEFAULT_UNIVERSAL_SHAPES)
     matcher_seeds = 0
     for ushape in shapes_universal:
         try:
@@ -128,8 +129,10 @@ def enumerate_programs_for_task(
             if uni_schemas:
                 # Select best pattern position based on structural complexity
                 best_pos, best_schema = select_best_pattern_position(uni_schemas)
-                abs_ops.append(OpMatchAnyUniversalSchemas([best_schema], label=f"match_universal_pos(shape={tuple(ushape)},pos={best_pos})"))
-                matcher_seeds += 1
+                # Only seed matcher with schemas that satisfy high-bar admissibility (mixed constraints)
+                if schema_is_admissible_mixed(best_schema):
+                    abs_ops.append(OpMatchAnyUniversalSchemas([best_schema], label=f"match_universal_pos(shape={tuple(ushape)},pos={best_pos})"))
+                    matcher_seeds += 1
         except Exception:
             continue
     # Node count heuristic: number of matcher seeds

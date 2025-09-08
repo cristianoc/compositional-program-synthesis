@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 
 from __future__ import annotations
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Dict, List, Optional, Union, Any
 import numpy as np
 from dsl_types.states import Operation, Grid, Matches
 
@@ -131,39 +131,75 @@ def format_schema_as_text(schema: List[List[Union[int, str]]]) -> str:
     return "\n".join(lines)
 
 
+def score_schema_structure(schema: List[List[Union[int, str]]]) -> int:
+    """Return a structural complexity score for a schema.
+
+    Higher scores reflect more constrained positions and richer variable relationships.
+    """
+    from collections import Counter
+    if not schema or not schema[0]:
+        return 0
+    nr, nc = len(schema), len(schema[0])
+    constraint_positions = 0
+    variable_counts = Counter()
+    for i in range(nr):
+        for j in range(nc):
+            cell = schema[i][j]
+            if cell != '*':
+                constraint_positions += 1
+                if isinstance(cell, str) and cell.isalpha():
+                    variable_counts[cell] += 1
+    variable_relationships = sum(count - 1 for count in variable_counts.values() if count > 1)
+    variable_diversity = len(variable_counts)
+    relationship_bonus = variable_relationships * 2
+    diversity_bonus = variable_diversity
+    return int(constraint_positions + relationship_bonus + diversity_bonus)
+
+
+def schema_constraints_summary(schema: List[List[Union[int, str]]]) -> dict:
+    """Return a summary of constraints present in the schema.
+
+    Keys: constants, variables, variable_occurrences, wildcards, total_elements
+    """
+    constants = 0
+    wildcards = 0
+    var_occ = 0
+    vars_set: set[str] = set()
+    total = 0
+    for row in schema or []:
+        for cell in row:
+            total += 1
+            if isinstance(cell, int):
+                constants += 1
+            elif isinstance(cell, str):
+                if cell == '*':
+                    wildcards += 1
+                else:
+                    var_occ += 1
+                    vars_set.add(cell)
+    return {
+        "constants": constants,
+        "variables": len(vars_set),
+        "variable_occurrences": var_occ,
+        "wildcards": wildcards,
+        "total_elements": total,
+    }
+
+
+def schema_is_admissible_mixed(schema: List[List[Union[int, str]]]) -> bool:
+    """High-bar admissibility: require at least one constant and at least one variable.
+
+    This is used to decide whether an abstraction "holds" strongly enough to cut search space.
+    """
+    s = schema_constraints_summary(schema)
+    return (s["constants"] >= 1) and (s["variables"] >= 1)
+
+
 def select_best_pattern_position(uni_schemas: Dict[tuple[int,int], List[List[Union[int,str]]]]) -> tuple[tuple[int,int], List[List[Union[int,str]]]]:
     """Select the pattern position with highest structural complexity from a set of universal schemas."""
-    from collections import Counter
-    
-    def analyze_schema_structure(schema):
-        """Analyze structural complexity of a schema."""
-        if not schema or not schema[0]:
-            return 0
-        
-        nr, nc = len(schema), len(schema[0])
-        constraint_positions = 0
-        variable_counts = Counter()
-        
-        for i in range(nr):
-            for j in range(nc):
-                cell = schema[i][j]
-                if cell != '*':  # Not a wildcard
-                    constraint_positions += 1
-                    if isinstance(cell, str) and cell.isalpha():  # Variable
-                        variable_counts[cell] += 1
-        
-        # Calculate structure score
-        variable_relationships = sum(count - 1 for count in variable_counts.values() if count > 1)
-        variable_diversity = len(variable_counts)
-        relationship_bonus = variable_relationships * 2  # High weight for repeated variables
-        diversity_bonus = variable_diversity
-        
-        return constraint_positions + relationship_bonus + diversity_bonus
-    
-    # Score all positions
     scored_positions = []
     for pos, schema in uni_schemas.items():
-        score = analyze_schema_structure(schema)
+        score = score_schema_structure(schema)
         scored_positions.append((pos, schema, score))
     
     # Return the position with highest structural complexity
