@@ -71,7 +71,7 @@ def patched_main():
     # Print combined results
     print("=== Node counts ===")
     print(f"G core nodes: {g_results['nodes']}")
-    print(f"Overlay+predicate nodes: {abs_results['ABS']['nodes']}")
+    print(f"Pattern matching nodes: {abs_results['ABS']['nodes']}")
     
     print("\n=== Programs found (G core) ===")
     if g_results['programs']:
@@ -80,7 +80,7 @@ def patched_main():
     else:
         print("(none)")
     
-    print("\n=== Programs found (overlay abstraction + pattern check) ===")
+    print("\n=== Programs found (pattern matching) ===")
     if abs_results['ABS']['programs']:
         for sname in abs_results['ABS']['programs']:
             print("-", sname)
@@ -90,19 +90,14 @@ def patched_main():
     # Print intersected universal schemas per shape (train+test) in nice 2D format
     try:
         print("\n=== Intersected universal schemas (train+test) ===")
-        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
+        from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task, format_schema_as_text
         for ushape in SHAPES:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
             if uni_schemas:
                 print(f"shape {ushape}: {len(uni_schemas)} positions")
                 for pos, schema in uni_schemas.items():
                     print(f"pos {pos}")
-                    # Convert schema to nice 2D text representation
-                    schema_text = []
-                    for row in schema:
-                        schema_text.append(" ".join(str(cell) for cell in row))
-                    for line in schema_text:
-                        print("", line)
+                    print(format_schema_as_text(schema))
     except Exception as e:
         print("[warn] failed to print universal schemas:", e)
     
@@ -141,7 +136,7 @@ def patched_main():
         images_dir = output_dir / "images"
         images_dir.mkdir(exist_ok=True)
         
-        # Generate overlay mosaic
+        # Generate pattern mosaic
         mosaic_data = []
         for ushape in SHAPES:
             uni_schemas = build_intersected_universal_schemas_for_task(task, window_shape=ushape, center_value=4, splits=("train","test"))
@@ -166,11 +161,11 @@ def patched_main():
             mosaic_img[i, 0] = color
         
         # Save mosaic
-        mosaic_path = images_dir / "overlay_mosaic.png"
+        mosaic_path = images_dir / "pattern_mosaic.png"
         import matplotlib.pyplot as plt
         plt.figure(figsize=(2, len(mosaic_data)))
         plt.imshow(mosaic_img, cmap='tab10', vmin=0, vmax=9)
-        plt.title("Overlay Mosaic")
+        plt.title("Pattern Mosaic")
         plt.axis('off')
         plt.tight_layout()
         plt.savefig(mosaic_path, dpi=100, bbox_inches='tight')

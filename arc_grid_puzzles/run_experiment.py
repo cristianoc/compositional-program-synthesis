@@ -55,9 +55,9 @@ def main():
         # Get node counts from the enumeration result
         abs_nodes = res_once['ABS']['nodes']
         print("=== Node counts ===")
-        print(f"Overlay+predicate nodes: {abs_nodes}")
+        print(f"Pattern matching nodes: {abs_nodes}")
 
-        print("\n=== Programs found (overlay abstraction + pattern check) ===")
+        print("\n=== Programs found (pattern matching) ===")
         abs_progs = res_once['ABS']['programs']
         if abs_progs:
             for sname in abs_progs:

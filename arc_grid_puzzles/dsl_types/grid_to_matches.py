@@ -122,6 +122,15 @@ def _build_combined_schema_from_windows(wins: List[np.ndarray]) -> List[List[Uni
     return schema
 
 
+def format_schema_as_text(schema: List[List[Union[int, str]]]) -> str:
+    """Format a schema as nice 2D text representation."""
+    lines = []
+    for row in schema:
+        line = " ".join(str(cell) for cell in row)
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def select_best_pattern_position(uni_schemas: Dict[tuple[int,int], List[List[Union[int,str]]]]) -> tuple[tuple[int,int], List[List[Union[int,str]]]]:
     """Select the pattern position with highest structural complexity from a set of universal schemas."""
     from collections import Counter
