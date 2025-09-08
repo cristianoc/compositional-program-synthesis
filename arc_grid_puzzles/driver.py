@@ -101,33 +101,11 @@ def enumerate_programs_for_task(
     num_preops: int = 200, 
     seed: int = 11, 
     *, 
-    universal_shapes: Optional[List[tuple[int,int]]] = None,
-    g_operations: Optional[List[Operation]] = None
+    universal_shapes: Optional[List[tuple[int,int]]] = None
 ) -> Dict[str, Any]:
-    """Enumerate programs for a task using both G core and pattern abstraction approaches."""
+    """Enumerate programs for a task using pattern abstraction approaches."""
     import time
     
-    # G core via typed composition engine (choose -> out), but keep node count from COLOR_RULES for continuity.
-    # G typed ops (choose -> out)
-    t0 = time.perf_counter()
-    if g_operations is None:
-        # Default: no G operations (empty list)
-        g_operations = []
-    winners_g = _enumerate_typed_programs(task, g_operations, max_depth=2, min_depth=2, start_type=Grid, end_type=Color)
-    t1 = time.perf_counter()
-    programs_G = []
-    for name, _ in winners_g:
-        # Present in legacy style for G composed programs
-        if name.startswith("choose_"):
-            parts = name.split(" |> ")
-            if len(parts) == 2 and parts[1].startswith("out_"):
-                programs_G.append(f"compose({parts[0]}->{parts[1]})")
-            else:
-                programs_G.append(name)
-        else:
-            programs_G.append(name)
-    total_G = len(g_operations)
-
     # Abstractions: enumerate universal fixed-schema pipelines only (no overlay-based seeds)
     shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = []
@@ -158,9 +136,9 @@ def enumerate_programs_for_task(
     # Node count heuristic: number of matcher seeds
     total_ABS = matcher_seeds
     # Enumerate up to depth 3 to allow schema-matching chains
-    t2 = time.perf_counter()
+    t0 = time.perf_counter()
     winners_abs = _enumerate_typed_programs(task, abs_ops, max_depth=4, min_depth=2, start_type=Grid, end_type=Color)
-    t3 = time.perf_counter()
+    t1 = time.perf_counter()
     programs_ABS = []
     
     # Evaluate each found program on test cases
@@ -204,21 +182,14 @@ def enumerate_programs_for_task(
         # Single programs list with test indicators (eliminates redundancy)
         programs_ABS.append(f"{prog_name} [{test_status} {test_correct}/{len(test_pairs)} test]")
 
-    return {"G": {"nodes": total_G, "programs": programs_G, "programs_found": len(programs_G), "time_sec": (t1 - t0)},
-            "ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t3 - t2), "program_sequences": winners_abs}}
+    return {"ABS": {"nodes": total_ABS, "programs": sorted(set(programs_ABS)), "programs_found": len(winners_abs), "time_sec": (t1 - t0), "program_sequences": winners_abs}}
 
 
 def print_programs_for_task(task: Dict, num_preops: int = 200, seed: int = 11):
     """Pretty-prints the programs and node counts."""
     res = enumerate_programs_for_task(task, num_preops=num_preops, seed=seed)
     print("=== Node counts ===")
-    print(f"G core nodes: {res['G']['nodes']}")
     print(f"Overlay+predicate nodes: {res['ABS']['nodes']}")
-    print("\n=== Programs found (G core) ===")
-    if res["G"]["programs"]:
-        for s in res["G"]["programs"]: print("-", s)
-    else:
-        print("(none)")
     print("\n=== Programs found (overlay abstraction + pattern check) ===")
     if res["ABS"]["programs"]:
         for s in res["ABS"]["programs"]: print("-", s)

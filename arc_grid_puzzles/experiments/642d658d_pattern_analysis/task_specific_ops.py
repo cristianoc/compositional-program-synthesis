@@ -62,3 +62,33 @@ G_TYPED_OPS_642D658D = [
     OpOutCrossModeForCenter33(),
     OpOutFlankModeForCenter(),
 ]
+
+
+def enumerate_g_programs(task):
+    """Enumerate G programs using task-specific operations."""
+    from driver import _enumerate_typed_programs
+    from dsl_types.states import Grid, Center, Color
+    import time
+    
+    t0 = time.perf_counter()
+    winners_g = _enumerate_typed_programs(task, G_TYPED_OPS_642D658D, max_depth=2, min_depth=2, start_type=Grid, end_type=Color)
+    t1 = time.perf_counter()
+    
+    programs_G = []
+    for name, _ in winners_g:
+        # Present in legacy style for G composed programs
+        if name.startswith("choose_"):
+            parts = name.split(" |> ")
+            if len(parts) == 2 and parts[1].startswith("out_"):
+                programs_G.append(f"compose({parts[0]}->{parts[1]})")
+            else:
+                programs_G.append(name)
+        else:
+            programs_G.append(name)
+    
+    return {
+        "nodes": len(G_TYPED_OPS_642D658D),
+        "programs": programs_G,
+        "programs_found": len(programs_G),
+        "time_sec": (t1 - t0)
+    }
