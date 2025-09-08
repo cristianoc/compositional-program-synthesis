@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import sys
 from pathlib import Path
-from typing import Union, List
-import numpy as np
 
 # Get the directory where this script is located
 script_dir = Path(__file__).parent.absolute()
@@ -19,17 +17,20 @@ experiment_name = script_name.replace('run_', '').replace('.py', '')
 task_path = script_dir / "tasks" / f"{experiment_name}.json"
 output_dir = script_dir / f"{experiment_name}_pattern_analysis"
 
-# Add task-specific operations to the DSL for this experiment
+"""Runner for the 642d658d task experiment.
+
+Keeps task-specific ops and assets co-located under
+experiments/642d658d_pattern_analysis/ for reproducibility.
+"""
+
+# Add task-specific operations to the path and import them
 experiment_dir = script_dir / f"{experiment_name}_pattern_analysis"
 sys.path.insert(0, str(experiment_dir))
-
-# Import task-specific operations
-from task_specific_ops import G_TYPED_OPS_642D658D, enumerate_g_programs
+from task_specific_ops import enumerate_g_programs  # noqa: E402
 
 # Import program search directly (no need for run_experiment)
 from program_search import enumerate_programs_for_task
 import json
-from pathlib import Path
 
 def patched_main():
     """Custom main that combines G ops and ABS results."""
@@ -123,8 +124,6 @@ def patched_main():
             select_best_pattern_position,
             OpMatchAnyUniversalSchemas,
         )
-        from dsl_types.matches_to_color import OpUniformColorFromMatchesExcludeGlobal
-        from dsl_types.states import Grid, Pipeline
         import numpy as np
         
         # Create images directory
@@ -169,7 +168,10 @@ def patched_main():
             
             # Show overlays (matching original approach)
             for ov in sorted(overlays, key=lambda ov: (ov["y1"], ov["x1"])):
-                y1,x1,y2,x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                y1 = ov["y1"] - 1
+                x1 = ov["x1"] - 1
+                y2 = ov["y2"] - 1
+                x2 = ov["x2"] - 1
                 draw_rect_outline(base, y1, x1, y2, x2, color=YELLOW, scale=SCALE)
             # Compose predicted color panel at right, same as original
             Hs = base.shape[0]
@@ -234,7 +236,8 @@ def patched_main():
                 colors = []
                 for ov in overlays:
                     # Use the detection anchor position (where pattern was found)
-                    y1, x1, y2, x2 = ov["y1"]-1, ov["x1"]-1, ov["y2"]-1, ov["x2"]-1
+                    y1 = ov["y1"] - 1
+                    x1 = ov["x1"] - 1
                     # The detection anchor is at the top-left of the bounding box
                     anchor_y, anchor_x = y1, x1
                     if 0 <= anchor_y < len(g) and 0 <= anchor_x < len(g[0]):
