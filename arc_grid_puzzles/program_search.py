@@ -17,7 +17,7 @@ from dsl_types.grid_to_matches import (
     select_best_pattern_position
 )
 from dsl_types.matches_to_color import (
-    MATCHES_TO_COLOR_OPERATIONS,
+    HEURISTIC_MATCHES_TO_COLOR_OPERATIONS,
     OpUniformColorPerSchemaThenMode,
     OpUniformColorFromMatchesExcludeGlobal
 )
@@ -109,8 +109,8 @@ def enumerate_programs_for_task(
     shapes: List[tuple[int,int]] = [(1,3), (3,1), (3,3)]
     abs_ops: List[Operation] = []
     
-    # Add all operations from registry
-    for op_class in MATCHES_TO_COLOR_OPERATIONS:
+    # Add all heuristic operations from simple list
+    for op_class in HEURISTIC_MATCHES_TO_COLOR_OPERATIONS:
         abs_ops.append(op_class())
     
     # Add parameterized variants

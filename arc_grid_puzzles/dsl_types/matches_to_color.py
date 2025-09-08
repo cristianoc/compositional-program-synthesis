@@ -44,6 +44,69 @@ class OpUniformColorPerSchemaThenMode(Operation[Matches, Color]):
         return Color(int(min(mode_vals)))
 
 
+class OpUniformColorFromMatchesUniformNeighborhood(Operation[Matches, Color]):
+    input_type = Matches
+    output_type = Color
+
+    label = "uniform_color_from_matches_uniform_neighborhood"
+
+    def _neighborhood_positions(self, nr: int, nc: int) -> List[tuple[int, int]]:
+        # Mirror UniformPatternPredicate center-neighborhood semantics by shape parity
+        if nr == 1 and nc == 3:
+            return [(0, 0), (0, 2)]
+        if nr == 3 and nc == 1:
+            return [(0, 0), (2, 0)]
+        if nr % 2 == 1 and nc % 2 == 1:
+            ci, cj = nr // 2, nc // 2
+            return [(ci - 1, cj), (ci + 1, cj), (ci, cj - 1), (ci, cj + 1)]
+        if nr % 2 == 0 and nc % 2 == 0:
+            i0, i1 = nr // 2 - 1, nr // 2
+            j0, j1 = nc // 2 - 1, nc // 2
+            return [(i0, j0), (i0, j1), (i1, j0), (i1, j1)]
+        if nr % 2 == 1 and nc % 2 == 0:
+            ci = nr // 2
+            j0, j1 = nc // 2 - 1, nc // 2
+            return [(ci, j0), (ci, j1)]
+        if nr % 2 == 0 and nc % 2 == 1:
+            cj = nc // 2
+            i0, i1 = nr // 2 - 1, nr // 2
+            return [(i0, cj), (i1, cj)]
+        return []
+
+    def apply(self, state: Matches) -> Color:
+        from collections import Counter
+        picks: List[int] = []
+        for m in state.matches:
+            mg = m.get("match")
+            if mg is None:
+                continue
+            nr = len(mg)
+            nc = len(mg[0]) if nr > 0 else 0
+            if nr == 0 or nc == 0:
+                continue
+            poss = self._neighborhood_positions(nr, nc)
+            if not poss:
+                continue
+            vals: List[int] = []
+            for (i, j) in poss:
+                v = mg[i][j]
+                if v is None:
+                    vals = []
+                    break
+                vals.append(int(v))
+            if not vals:
+                continue
+            if len(set(vals)) == 1 and vals[0] != 0:
+                picks.append(int(vals[0]))
+
+        if not picks:
+            return Color(0)
+        c = Counter(picks)
+        top = max(c.values())
+        mode_vals = [k for k, v in c.items() if v == top]
+        return Color(int(min(mode_vals)))
+
+
 class OpUniformColorFromMatchesExcludeGlobal(Operation[Matches, Color]):
     input_type = Matches
     output_type = Color
@@ -89,9 +152,10 @@ class OpUniformColorFromMatchesExcludeGlobal(Operation[Matches, Color]):
 # OPERATION REGISTRY
 # =============================================================================
 
-# Registry of all Matches -> Color operations in this module
-MATCHES_TO_COLOR_OPERATIONS = [
+# Registry of all heuristic Matches -> Color operations in this module
+HEURISTIC_MATCHES_TO_COLOR_OPERATIONS = [
     OpUniformColorPerSchemaThenMode,
+    OpUniformColorFromMatchesUniformNeighborhood,
     OpUniformColorFromMatchesExcludeGlobal,
 ]
 
@@ -112,7 +176,7 @@ def _validate_registry():
             operation_classes.append(obj)
     
     # Check that registry contains exactly these classes
-    registry_set = set(MATCHES_TO_COLOR_OPERATIONS)
+    registry_set = set(HEURISTIC_MATCHES_TO_COLOR_OPERATIONS)
     defined_set = set(operation_classes)
     
     if registry_set != defined_set:

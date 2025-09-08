@@ -147,7 +147,7 @@ def patched_main():
             base = upsample(grid_to_rgb(g), scale=SCALE)
             
             # Use original overlay detection approach
-            overlays = detect_pattern_matches(g.tolist(), kind="window_nxm", color=4, window_shape=shape)
+            overlays = detect_pattern_matches(g.tolist(), color=4, window_shape=shape)
             
             # Show overlays (matching original approach)
             for ov in sorted(overlays, key=lambda ov: (ov["y1"], ov["x1"])):
@@ -197,7 +197,7 @@ def patched_main():
             # Choose aggregator: use original predict_with_pattern_kind approach
             def predict_for_grid(g, shape):
                 # Use original overlay detection approach for prediction
-                overlays = detect_pattern_matches(g.tolist(), kind="window_nxm", color=4, window_shape=shape)
+                overlays = detect_pattern_matches(g.tolist(), color=4, window_shape=shape)
                 if not overlays:
                     return 0
                 

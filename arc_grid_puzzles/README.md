@@ -1,49 +1,43 @@
-# Compositional Abstractions for ARC-Style Tasks
+# Compositional Program Synthesis for ARC Grid Puzzles
 
-This directory contains the implementation and documentation for compositional abstractions that eliminate symmetries in ARC-style grid puzzles.
-
-## Files
-
-- **`compositional_abstractions.pdf`** - Main research paper (compiled LaTeX)
-- **`compositional_abstractions.tex`** - LaTeX source for the paper
-- **`dsl.py`** - Python implementation of the DSL and abstraction experiments
-- **`challenging_metrics.json`** - Experimental results in JSON format
-- **`challenging_metrics.txt`** - Human-readable experimental results
+This repository provides a clean implementation of pattern-based program synthesis for ARC-style grid puzzles. It enumerates pattern matchers and simple heuristic aggregators to predict outputs.
 
 ## Quick Start
 
-### Viewing the Paper
-Open `compositional_abstractions.pdf` to read the full research note.
-
-### Running Experiments
 ```bash
-# Run a specific experiment (self-discoverable, no args needed)
+# Run the main experiment (self-discoverable, no args needed)
 cd experiments
 python run_642d658d.py
 ```
 
-### Compiling LaTeX
-```bash
-pdflatex compositional_abstractions.tex
-```
+This will:
+1. Load task data from `experiments/tasks/642d658d.json`
+2. Enumerate universal pattern schemas across train+test
+3. Build matcher→aggregator pipelines and evaluate them on train
+4. Write results to `experiments/642d658d_pattern_analysis/` (including `programs_found.json` and mosaics)
 
-## Method Overview
+## How It Works
 
-The approach uses two compositional abstractions:
-1. **A₁ (Palette canonicalization)**: Relabel non-zero colors by decreasing frequency to quotient out palette symmetry
-2. **A₂ (Canonical object order)**: Sort connected components by (area, top, left, color) to quotient out object-enumeration symmetry
+### Pattern Detection and Universal Schemas
+- Patterns are detected around a fixed center color (4) using sliding windows with shapes:
+  - `(1,3), (3,1), (2,3), (3,3), (5,5)`
+- For each shape and position, a universal schema is intersected across train+test examples.
+- The most informative position is selected per shape via structural complexity.
 
-This achieves dramatic search space reductions:
-- **G→A₁**: 2404→172 programs (-92.85%)
-- **A₁→A₂**: 172→2 programs (-98.84%)
-- **Overall**: 2404→2 programs (-99.917%) with 138× speedup
+### Program Search
+A program is a short pipeline: `match_universal_pos(...) |> aggregator`
 
-## Results Summary
+Heuristic aggregators currently used:
+- `uniform_color_per_schema_then_mode`
+- `uniform_color_from_matches_uniform_neighborhood` (restored)
+- `uniform_from_matches_excl_global`
 
-| Method | Total Candidates | Valid Programs | Avg Tries to Success | Wall Time (s) |
-|--------|------------------|----------------|---------------------|---------------|
-| G      | 2404            | 441            | 5.405               | 3.884         |
-| A₁     | 172             | 4              | 35.573              | 0.197         |
-| A₁→A₂  | 2               | 2              | 1.000               | 0.028         |
+Programs must achieve 100% accuracy on training examples to be considered winners.
 
-The composed abstractions (A₁→A₂) achieve near-zero search cost with 100% validity rate.
+## Current Results (642d658d)
+
+Examples of successful programs (see `experiments/642d658d_pattern_analysis/programs_found.json`):
+- `match_universal_pos(shape=(1, 3),pos=(0, 1)) |> uniform_color_from_matches_uniform_neighborhood`
+- `match_universal_pos(shape=(3, 1),pos=(1, 0)) |> uniform_color_from_matches_uniform_neighborhood`
+- `match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_from_matches_excl_global`
+- `match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_from_matches_excl_global`
