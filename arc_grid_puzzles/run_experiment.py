@@ -5,7 +5,7 @@
 #  • Prints programs found & node counts/timings
 #  • Renders annotated images (universal matches + predicted color)
 # Usage: python run_experiment.py <task_path>
-# Example: python run_experiment.py tasks/642d658d/task.json
+# Example: python run_experiment.py experiments/642d658d/task.json
 # -----------------------------------------------------------------------------
 
 import json, time, numpy as np, os, argparse
