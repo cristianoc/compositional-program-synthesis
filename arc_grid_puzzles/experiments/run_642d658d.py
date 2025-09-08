@@ -26,32 +26,21 @@ sys.path.insert(0, str(experiment_dir))
 # Import task-specific operations
 from task_specific_ops import G_TYPED_OPS_642D658D, enumerate_g_programs
 
-# Patch the run_experiment module to combine G and ABS results
-import run_experiment
+# Import program search directly (no need for run_experiment)
+from program_search import enumerate_programs_for_task
 import json
 from pathlib import Path
 
 def patched_main():
     """Custom main that combines G ops and ABS results."""
-    # Parse arguments
-    import argparse
-    parser = argparse.ArgumentParser(description='Run pattern abstraction experiment on ARC task')
-    parser.add_argument('task_path', help='Path to task.json file')
-    parser.add_argument('--output-dir', help='Output directory for results (default: same as task directory)')
-    args = parser.parse_args()
+    # Use the paths already set up at the top of the script
+    # task_path and output_dir are already defined globally
     
-    task_path = Path(args.task_path)
     if not task_path.exists():
         print(f"Error: Task file not found: {task_path}")
         return
     
     task = json.loads(task_path.read_text())
-    
-    # Determine output directory
-    if args.output_dir:
-        output_dir = Path(args.output_dir)
-    else:
-        output_dir = task_path.parent
     
     output_dir.mkdir(parents=True, exist_ok=True)
     
@@ -62,7 +51,7 @@ def patched_main():
     # Run ABS enumeration
     print("=== Enumerating ABS programs ===")
     SHAPES = [(1,3),(3,1),(2,3),(3,3),(5,5)]
-    abs_results = run_experiment.enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
+    abs_results = enumerate_programs_for_task(task, num_preops=200, seed=11, universal_shapes=SHAPES)
     
     # Combine results
     combined_results = {
@@ -325,9 +314,5 @@ def patched_main():
     except Exception as e:
         print("[warn] failed to generate images:", e)
 
-# Replace the run_experiment main with our custom one
-run_experiment.main = patched_main
-
-sys.argv = ["run_experiment.py", str(task_path), "--output-dir", str(output_dir)]
-from run_experiment import main
-main()
+if __name__ == "__main__":
+    patched_main()
