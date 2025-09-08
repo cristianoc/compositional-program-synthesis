@@ -119,7 +119,7 @@ def patched_main():
     try:
         print("\n=== Generating images ===")
         from dsl_types.grid_to_matches import build_intersected_universal_schemas_for_task
-        from dsl_types.matches_to_color import OpUniformColorFromMatches
+        from dsl_types.matches_to_color import OpUniformColorFromMatchesExcludeGlobal
         from dsl_types.states import Grid, Pipeline
         import numpy as np
         

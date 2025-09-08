@@ -2,23 +2,12 @@
   "ABS": {
     "nodes": 5,
     "programs": [
-      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> uniform_color_per_schema_then_mode",
-      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> uniform_color_from_matches_uniform_neighborhood",
-      "match_universal_pos(shape=(1, 3),pos=(0, 1)) |> uniform_from_matches_excl_global",
-      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> uniform_color_per_schema_then_mode",
-      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> uniform_color_from_matches_uniform_neighborhood",
-      "match_universal_pos(shape=(3, 1),pos=(1, 0)) |> uniform_from_matches_excl_global",
-      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_color_from_matches",
       "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_from_matches_excl_global",
-      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_color_per_schema_then_mode",
-      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_color_from_matches",
-      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_color_per_schema_then_mode",
-      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_color_from_matches_uniform_neighborhood",
+      "match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_from_matches_excl_global",
       "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_from_matches_excl_global",
-      "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_color_per_schema_then_mode",
       "match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_from_matches_excl_global"
     ],
-    "programs_found": 15
+    "programs_found": 4
   },
   "G": {
     "nodes": 3,
