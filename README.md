@@ -162,8 +162,7 @@ This document deliberately leaves the proposal mechanism unspecified. In the env
 compositional-program-synthesis/
   README.md                           # this file
   arc_grid_puzzles/
-    run_experiment.py                # generic experiment runner for ARC tasks
-    driver.py                        # generic driver for program enumeration
+    experiments/driver.py            # shared driver for ARC experiments
     dsl_types/                       # typed DSL operations by input/output types
     abstractions/                     # pattern matching abstractions
     challenging_metrics.json        # metrics data for challenging tasks

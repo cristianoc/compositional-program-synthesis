@@ -11,7 +11,7 @@ python run_642d658d.py
 ```
 
 This will:
-1. Load task data from `experiments/tasks/642d658d.json`
+1. Load task data from `tasks/arc_agi_1/evaluation/642d658d.json`
 2. Enumerate universal pattern schemas across train+test
 3. Build matcher→aggregator pipelines and evaluate them on train
 4. Write results to `experiments/642d658d_pattern_analysis/` (including `programs_found.json` and mosaics)

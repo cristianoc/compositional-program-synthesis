@@ -6,13 +6,11 @@ This directory contains experiments for ARC (Abstraction and Reasoning Corpus) g
 
 ```
 experiments/
-├── tasks/                    # Dataset: ARC task definitions
-│   └── 642d658d.json       # Task data (input/output examples)
 ├── 642d658d_pattern_analysis/  # Experiment results
 │   ├── programs_found.json
 │   ├── images/
 │   └── README.md
-└── run_642d658d.py         # Self-discoverable experiment runner
+└── run_642d658d.py         # Self-discoverable experiment runner (uses global ARC‑AGI task)
 ```
 
 ## Running Experiments
@@ -57,7 +55,7 @@ The runner automatically:
 
 The `arc_agi_evaluation` suite provides dataset-wide runners:
 
-- Pattern analysis over all tasks:
+- Abstraction-holds over all tasks:
   ```bash
   cd experiments/arc_agi_evaluation
   python run_pattern_analysis_all.py \
