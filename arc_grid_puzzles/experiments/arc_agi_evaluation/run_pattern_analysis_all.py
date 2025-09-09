@@ -130,6 +130,7 @@ def main():
     ap.add_argument("--shapes", nargs="*", help="Override shapes as tokens like 1x3 3x1 3x3")
     ap.add_argument("--task-id", help="Analyze only a single task by file stem (e.g., 642d658d)")
     ap.add_argument("--limit", type=int, help="Limit number of tasks after filtering")
+    ap.add_argument("--full", action="store_true", help="Also write the full detailed results JSON (large)")
     args = ap.parse_args()
 
     shapes = _parse_shapes(args.shapes)
@@ -187,12 +188,14 @@ def main():
         holds_rate = stats['holds'] / stats['total'] * 100 if stats['total'] > 0 else 0
         print(f"  {dataset}: {stats['total']} tasks, {stats['compatible']} single-color ({single_color_rate:.1f}%), {stats['holds']} holds ({holds_rate:.1f}%)")
     
-    # Save detailed results
-    results_file = Path(__file__).parent / "arc_agi_pattern_analysis_results.json"
-    with open(results_file, 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\n💾 Detailed pattern analysis results saved to: {results_file}")
+    # Optionally save detailed results (large)
+    if args.full:
+        results_file = Path(__file__).parent / "arc_agi_pattern_analysis_results.json"
+        with open(results_file, 'w') as f:
+            json.dump(results, f, indent=2)
+        print(f"\n💾 Detailed pattern analysis results saved to: {results_file}")
+    else:
+        print("\nℹ️ Skipping detailed results (use --full to write the large JSON)")
 
     # Save compact summary (overall + per-dataset) for version control
     summary_payload = {
