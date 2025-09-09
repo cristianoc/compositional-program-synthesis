@@ -20,10 +20,10 @@ Pattern analysis:
 ```bash
 cd experiments/arc_agi_evaluation
 # Summary only (default):
-python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50
+python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50 -j 12
 
 # Also write the large detailed results JSON:
-python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50 --full
+python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50 --full -j 12
 ```
 
 Solver run:
@@ -41,6 +41,8 @@ python run_solve_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 5
 - --limit: integer, optional; limit number of tasks after filtering
 - --task-id: optional; solve/analyze a single task by filename stem (e.g., 642d658d)
 - --full: optional; also write the large detailed results JSON
+- -j, --jobs: optional; parallel jobs (processes). Default 12 on this machine.
+- -q, --quiet: optional; reduce per-task logging (useful for benchmarking)
 
 Outputs:
 - Pattern analysis (always): `arc_agi_pattern_analysis_summary.json` (compact overall + per-dataset stats)

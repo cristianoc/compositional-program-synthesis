@@ -164,7 +164,7 @@ def main():
     ap.add_argument("--task-id", help="Analyze only a single task by file stem (e.g., 642d658d)")
     ap.add_argument("--limit", type=int, help="Limit number of tasks after filtering")
     ap.add_argument("--full", action="store_true", help="Also write the full detailed results JSON (large)")
-    ap.add_argument("-j", "--jobs", type=int, default=1, help="Parallel jobs (processes); 1 = no parallelism")
+    ap.add_argument("-j", "--jobs", type=int, default=12, help="Parallel jobs (processes); default 12 on this machine")
     ap.add_argument("-q", "--quiet", action="store_true", help="Reduce per-task logging (useful for benchmarking)")
     args = ap.parse_args()
 
