@@ -61,7 +61,7 @@ def _analyze_one(args: Tuple[str, List[tuple[int,int]] | None]) -> Tuple[bool, D
     return holds, task_result
 
 
-def analyze_all_tasks(dataset: str = "all", split: str = "all", shapes: List[tuple[int,int]] | None = None, limit: int | None = None, task_id: str | None = None, jobs: int = 1) -> Dict[str, Any]:
+def analyze_all_tasks(dataset: str = "all", split: str = "all", shapes: List[tuple[int,int]] | None = None, limit: int | None = None, task_id: str | None = None, jobs: int = 1, quiet: bool = False) -> Dict[str, Any]:
     """Analyze abstractions in ARC-AGI tasks and report whether they hold (no interestingness scoring)."""
     # Discover and filter tasks
     all_test_tasks = driver_mod.discover_all_task_paths()
@@ -78,27 +78,31 @@ def analyze_all_tasks(dataset: str = "all", split: str = "all", shapes: List[tup
         'summary': {}
     }
     
-    print(f"Analyzing patterns in {len(all_test_tasks)} ARC-AGI tasks (after filters)")
-    print("=" * 60)
+    if not quiet:
+        print(f"Analyzing patterns in {len(all_test_tasks)} ARC-AGI tasks (after filters)")
+        print("=" * 60)
     
     if jobs <= 1:
         for i, task_path in enumerate(all_test_tasks, 1):
             if not task_path.exists():
                 print(f"⚠️  [{i:2d}/{len(all_test_tasks)}] Task not found: {task_path.name}")
                 continue
-            status_mark = "📝"
-            print(f"{status_mark} [{i:2d}/{len(all_test_tasks)}] Analyzing {task_path.name}...", end=' ')
+            if not quiet:
+                status_mark = "📝"
+                print(f"{status_mark} [{i:2d}/{len(all_test_tasks)}] Analyzing {task_path.name}...", end=' ')
             holds, task_result = _analyze_one((str(task_path), shapes))
             if holds:
                 results['tasks_where_abstraction_holds'].append(task_result)
-                print(f"✅ HOLDS ({len(task_result['admissible_schemas'])} admissible schemas, {task_result['elapsed_time']:.2f}s)")
+                if not quiet:
+                    print(f"✅ HOLDS ({len(task_result['admissible_schemas'])} admissible schemas, {task_result['elapsed_time']:.2f}s)")
             else:
                 results['tasks_where_abstraction_not_holds'].append(task_result)
-                if task_result.get('incompatible', False):
-                    print(f"❌ INCOMPATIBLE ({task_result['elapsed_time']:.2f}s)")
-                    print(f"    Reason: {task_result.get('reason', 'Unknown')}")
-                else:
-                    print(f"✓ Analyzed ({task_result['elapsed_time']:.2f}s)")
+                if not quiet:
+                    if task_result.get('incompatible', False):
+                        print(f"❌ INCOMPATIBLE ({task_result['elapsed_time']:.2f}s)")
+                        print(f"    Reason: {task_result.get('reason', 'Unknown')}")
+                    else:
+                        print(f"✓ Analyzed ({task_result['elapsed_time']:.2f}s)")
             results['tasks_analyzed'] += 1
     else:
         from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -111,20 +115,24 @@ def analyze_all_tasks(dataset: str = "all", split: str = "all", shapes: List[tup
                 try:
                     holds, task_result = fut.result()
                 except Exception as e:
-                    print(f"⚠️  [{i:2d}/{total}] Error: {e}")
+                    if not quiet:
+                        print(f"⚠️  [{i:2d}/{total}] Error: {e}")
                     continue
                 name = task_result['task_file']
-                print(f"📝 [{i:2d}/{total}] Analyzing {name}...", end=' ')
+                if not quiet:
+                    print(f"📝 [{i:2d}/{total}] Analyzing {name}...", end=' ')
                 if holds:
                     results['tasks_where_abstraction_holds'].append(task_result)
-                    print(f"✅ HOLDS ({len(task_result['admissible_schemas'])} admissible schemas, {task_result['elapsed_time']:.2f}s)")
+                    if not quiet:
+                        print(f"✅ HOLDS ({len(task_result['admissible_schemas'])} admissible schemas, {task_result['elapsed_time']:.2f}s)")
                 else:
                     results['tasks_where_abstraction_not_holds'].append(task_result)
-                    if task_result.get('incompatible', False):
-                        print(f"❌ INCOMPATIBLE ({task_result['elapsed_time']:.2f}s)")
-                        print(f"    Reason: {task_result.get('reason', 'Unknown')}")
-                    else:
-                        print(f"✓ Analyzed ({task_result['elapsed_time']:.2f}s)")
+                    if not quiet:
+                        if task_result.get('incompatible', False):
+                            print(f"❌ INCOMPATIBLE ({task_result['elapsed_time']:.2f}s)")
+                            print(f"    Reason: {task_result.get('reason', 'Unknown')}")
+                        else:
+                            print(f"✓ Analyzed ({task_result['elapsed_time']:.2f}s)")
                 results['tasks_analyzed'] += 1
     
     # Calculate summary statistics
@@ -157,6 +165,7 @@ def main():
     ap.add_argument("--limit", type=int, help="Limit number of tasks after filtering")
     ap.add_argument("--full", action="store_true", help="Also write the full detailed results JSON (large)")
     ap.add_argument("-j", "--jobs", type=int, default=1, help="Parallel jobs (processes); 1 = no parallelism")
+    ap.add_argument("-q", "--quiet", action="store_true", help="Reduce per-task logging (useful for benchmarking)")
     args = ap.parse_args()
 
     shapes = _parse_shapes(args.shapes)
@@ -174,7 +183,7 @@ def main():
     random.seed(42)
     
     # Analyze patterns in all tasks
-    results = analyze_all_tasks(dataset=args.dataset, split=args.split, shapes=shapes, limit=args.limit, task_id=args.task_id, jobs=args.jobs)
+    results = analyze_all_tasks(dataset=args.dataset, split=args.split, shapes=shapes, limit=args.limit, task_id=args.task_id, jobs=args.jobs, quiet=args.quiet)
     
     # Print summary
     summary = results['summary']
