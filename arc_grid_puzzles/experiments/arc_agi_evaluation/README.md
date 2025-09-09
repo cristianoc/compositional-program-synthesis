@@ -19,7 +19,11 @@ From the project root directory:
 Pattern analysis:
 ```bash
 cd experiments/arc_agi_evaluation
+# Summary only (default):
 python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50
+
+# Also write the large detailed results JSON:
+python run_pattern_analysis_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 50 --full
 ```
 
 Solver run:
@@ -36,9 +40,11 @@ python run_solve_all.py --dataset all --split all --shapes 1x3 3x1 3x3 --limit 5
   - default: `program_search.DEFAULT_UNIVERSAL_SHAPES` (currently [(1,3), (3,1), (3,3)])
 - --limit: integer, optional; limit number of tasks after filtering
 - --task-id: optional; solve/analyze a single task by filename stem (e.g., 642d658d)
+- --full: optional; also write the large detailed results JSON
 
 Outputs:
-- Pattern analysis: `arc_agi_pattern_analysis_results.json`
+- Pattern analysis (always): `arc_agi_pattern_analysis_summary.json` (compact overall + per-dataset stats)
+- Pattern analysis (with `--full`): `arc_agi_pattern_analysis_results.json` (large, detailed)
 - Solver results: `arc_agi_all_results.json`
 
 ## Task Compatibility

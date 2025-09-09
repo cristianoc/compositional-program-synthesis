@@ -62,6 +62,10 @@ The `arc_agi_evaluation` suite provides dataset-wide runners:
     --dataset all --split all \
     --shapes 1x3 3x1 3x3 \
     --limit 50
+
+  # Add --full to also write the large detailed results JSON
+  # (default writes the compact summary only)
+  python run_pattern_analysis_all.py --dataset all --split all --full
   ```
   Outputs: `arc_agi_pattern_analysis_results.json`
 
