@@ -193,6 +193,16 @@ def main():
         json.dump(results, f, indent=2)
     
     print(f"\n💾 Detailed pattern analysis results saved to: {results_file}")
+
+    # Save compact summary (overall + per-dataset) for version control
+    summary_payload = {
+        'summary': summary,
+        'dataset_breakdown': datasets,
+    }
+    summary_file = Path(__file__).parent / "arc_agi_pattern_analysis_summary.json"
+    with open(summary_file, 'w') as f:
+        json.dump(summary_payload, f, indent=2)
+    print(f"💾 Summary saved to: {summary_file}")
     
     return results
 
