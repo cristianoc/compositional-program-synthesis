@@ -9,12 +9,17 @@ project_root = script_dir.parent
 # Add project root to path
 sys.path.insert(0, str(project_root))
 
+"""Runner for the 642d658d task experiment.
+
+Uses the global ARC-AGI dataset task explicitly to avoid ambiguity.
+"""
+
 # Get experiment name from script name
 script_name = Path(__file__).name
 experiment_name = script_name.replace('run_', '').replace('.py', '')
 
-# Set up args and run with absolute paths
-task_path = script_dir / "tasks" / f"{experiment_name}.json"
+# Hardcoded global dataset path (first encountered in global discovery order)
+task_path = project_root / "tasks" / "arc_agi_1" / "evaluation" / f"{experiment_name}.json"
 output_dir = script_dir / f"{experiment_name}_pattern_analysis"
 
 """Runner for the 642d658d task experiment.
@@ -41,6 +46,7 @@ def patched_main():
         print(f"Error: Task file not found: {task_path}")
         return
     
+    # Load task JSON
     task = json.loads(task_path.read_text())
     
     output_dir.mkdir(parents=True, exist_ok=True)
