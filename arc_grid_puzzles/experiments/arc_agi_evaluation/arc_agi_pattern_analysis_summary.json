@@ -1,0 +1,18 @@
+{
+  "summary": {
+    "total_analyzed": 50,
+    "holds_count": 5,
+    "not_holds_count": 45,
+    "incompatible_count": 44,
+    "compatible_analyzed": 6,
+    "holds_rate": 0.1,
+    "holds_rate_compatible_only": 0.8333333333333334
+  },
+  "dataset_breakdown": {
+    "arc_agi_1/training": {
+      "total": 50,
+      "compatible": 1,
+      "holds": 5
+    }
+  }
+}

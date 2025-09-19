@@ -36,14 +36,14 @@ Note: Consistency is necessary but not sufficient. Different abstractions can ad
 
 Two toy instantiations show meaningful speedups:
 
-#### 1. ARC-AGI Grid Puzzles
+#### 1. ARC-AGI Grid Puzzles (`arc_grid_puzzles/`)
 Eliminates symmetries in grid puzzles through two abstraction levels:
 - **A₁**: Palette canonicalization (quotient out color symmetries)
 - **A₂**: Object ordering canonicalization (quotient out enumeration symmetries)
 
 **Result**: 2404→2 programs (-99.917%), 138× speedup.
 
-#### 2. Inductive Programming (Flash Fill style)
+#### 2. Inductive Programming (`program_synthesis/`, Flash Fill style)
 Two-phase approach for program synthesis on product domains:
 - **A**: Cross-free factorization (solve coordinates independently) 
 - **A⁺**: Interface refinement (add minimal cross-operation coupling)
@@ -161,18 +161,20 @@ This document deliberately leaves the proposal mechanism unspecified. In the env
 ```text
 compositional-program-synthesis/
   README.md                           # this file
-  arc_dsl_experiment/
-    dsl.py                           # domain-specific language implementation
-    challenging_metrics.json        # metrics data for challenging tasks
-    challenging_metrics.txt         # human-readable metrics summary
-    compositional_abstractions.tex  # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
-    compositional_abstractions.pdf  # compiled paper
-    README.md                       # documentation for DSL experiments
+  arc_grid_puzzles/
+    experiments/driver.py            # shared driver for ARC experiments
+    dsl_types/                       # typed DSL operations by input/output types
+    abstractions/                    # pattern matching abstractions
+    challenging_metrics.json         # metrics data for challenging tasks
+    challenging_metrics.txt          # human-readable metrics summary
+    compositional_abstractions.tex   # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
+    compositional_abstractions.pdf   # compiled paper
+    README.md                        # documentation for ARC grid puzzle experiments
   program_synthesis/
-    scaling.py                      # scaling analysis and performance evaluation
-    compositional_synthesis.tex    # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
-    compositional_synthesis.pdf    # compiled paper
-    nodes_vs_k_scaling.png         # visualization: node count vs. parameter k
-    speedup_vs_k.png              # visualization: speedup analysis
-    README.md                     # documentation for synthesis experiments
+    scaling.py                       # scaling analysis and performance evaluation
+    compositional_synthesis.tex      # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
+    compositional_synthesis.pdf      # compiled paper
+    nodes_vs_k_scaling.png           # visualization: node count vs. parameter k
+    speedup_vs_k.png                 # visualization: speedup analysis
+    README.md                        # documentation for synthesis experiments
 ```
