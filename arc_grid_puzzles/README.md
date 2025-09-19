@@ -41,3 +41,10 @@ Examples of successful programs (see `experiments/642d658d_pattern_analysis/prog
 - `match_universal_pos(shape=(3, 1),pos=(1, 0)) |> uniform_color_from_matches_uniform_neighborhood`
 - `match_universal_pos(shape=(2, 3),pos=(0, 1)) |> uniform_from_matches_excl_global`
 - `match_universal_pos(shape=(3, 3),pos=(1, 1)) |> uniform_from_matches_excl_global`
+
+## Concept ↔ Meta-Program Companion Report
+
+The Value→Program Abstraction companion note connects Chollet’s concept/meta-program framing to the auto-generated ARC refinement reports produced during the abstraction-refinement experiment (see background threads [1967432164024189413](https://x.com/ccrisccris/status/1967432164024189413) and [1968543176173760936](https://x.com/ccrisccris/status/1968543176173760936)). It highlights which value abstractions (signals extracted from grids) hand off to which program abstractions (solver procedures) across the top ARC tasks.
+
+- Read it at `reports/value_program_abstraction_companion/` (includes images and task index JSON).
+- Generate the underlying per-task reports by running the abstraction-refinement sweep and collecting the `analysis/task*_abstractions_report.md` outputs; the companion summarises those notes for quick reference alongside the `experiments/arc_agi_evaluation` runners.

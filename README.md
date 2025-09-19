@@ -43,6 +43,8 @@ Eliminates symmetries in grid puzzles through two abstraction levels:
 
 **Result**: 2404→2 programs (-99.917%), 138× speedup.
 
+Companion reading: `arc_grid_puzzles/reports/value_program_abstraction_companion/` documents how the abstraction-refinement sweep (see background threads [1967432164024189413](https://x.com/ccrisccris/status/1967432164024189413) and [1968543176173760936](https://x.com/ccrisccris/status/1968543176173760936)) maps the ARC auto-reports onto Chollet’s value→program (concept/meta-program) pipeline.
+
 #### 2. Inductive Programming (`program_synthesis/`, Flash Fill style)
 Two-phase approach for program synthesis on product domains:
 - **A**: Cross-free factorization (solve coordinates independently) 
@@ -170,6 +172,10 @@ compositional-program-synthesis/
     compositional_abstractions.tex   # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
     compositional_abstractions.pdf   # compiled paper
     README.md                        # documentation for ARC grid puzzle experiments
+    reports/value_program_abstraction_companion/
+      README.md                      # Value→Program Abstraction companion note (concept/meta-program framing)
+      report_assets/                 # diagrams referenced in the companion
+      selected_task_hex_mapping.json # task index used by the companion report
   program_synthesis/
     scaling.py                       # scaling analysis and performance evaluation
     compositional_synthesis.tex      # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
