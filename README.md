@@ -43,7 +43,7 @@ Eliminates symmetries in grid puzzles through two abstraction levels:
 
 **Result**: 2404→2 programs (-99.917%), 138× speedup.
 
-#### 2. Inductive Programming (`program_synthesis/`)
+#### 2. Inductive Programming (`program_synthesis/`, Flash Fill style)
 Two-phase approach for program synthesis on product domains:
 - **A**: Cross-free factorization (solve coordinates independently) 
 - **A⁺**: Interface refinement (add minimal cross-operation coupling)
@@ -164,17 +164,17 @@ compositional-program-synthesis/
   arc_grid_puzzles/
     experiments/driver.py            # shared driver for ARC experiments
     dsl_types/                       # typed DSL operations by input/output types
-    abstractions/                     # pattern matching abstractions
-    challenging_metrics.json        # metrics data for challenging tasks
-    challenging_metrics.txt         # human-readable metrics summary
-    compositional_abstractions.tex  # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
-    compositional_abstractions.pdf  # compiled paper
-    README.md                       # documentation for ARC grid puzzle experiments
+    abstractions/                    # pattern matching abstractions
+    challenging_metrics.json         # metrics data for challenging tasks
+    challenging_metrics.txt          # human-readable metrics summary
+    compositional_abstractions.tex   # LaTeX paper: "Compositional Abstractions for ARC-Style Tasks"
+    compositional_abstractions.pdf   # compiled paper
+    README.md                        # documentation for ARC grid puzzle experiments
   program_synthesis/
-    scaling.py                      # scaling analysis and performance evaluation
-    compositional_synthesis.tex    # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
-    compositional_synthesis.pdf    # compiled paper
-    nodes_vs_k_scaling.png         # visualization: node count vs. parameter k
-    speedup_vs_k.png              # visualization: speedup analysis
-    README.md                     # documentation for synthesis experiments
+    scaling.py                       # scaling analysis and performance evaluation
+    compositional_synthesis.tex      # LaTeX paper: "Compositional Synthesis via Exact Interface Abstraction"
+    compositional_synthesis.pdf      # compiled paper
+    nodes_vs_k_scaling.png           # visualization: node count vs. parameter k
+    speedup_vs_k.png                 # visualization: speedup analysis
+    README.md                        # documentation for synthesis experiments
 ```
