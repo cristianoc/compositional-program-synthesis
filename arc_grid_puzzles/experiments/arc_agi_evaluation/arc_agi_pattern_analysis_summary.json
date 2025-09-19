@@ -1,33 +1,18 @@
 {
   "summary": {
-    "total_analyzed": 1920,
-    "holds_count": 373,
-    "not_holds_count": 1547,
-    "incompatible_count": 1535,
-    "compatible_analyzed": 385,
-    "holds_rate": 0.19427083333333334,
-    "holds_rate_compatible_only": 0.9688311688311688
+    "total_analyzed": 50,
+    "holds_count": 5,
+    "not_holds_count": 45,
+    "incompatible_count": 44,
+    "compatible_analyzed": 6,
+    "holds_rate": 0.1,
+    "holds_rate_compatible_only": 0.8333333333333334
   },
   "dataset_breakdown": {
     "arc_agi_1/training": {
-      "total": 400,
-      "compatible": 6,
-      "holds": 60
-    },
-    "arc_agi_1/evaluation": {
-      "total": 400,
-      "compatible": 2,
-      "holds": 83
-    },
-    "arc_agi_2/training": {
-      "total": 1000,
-      "compatible": 8,
-      "holds": 204
-    },
-    "arc_agi_2/evaluation": {
-      "total": 120,
-      "compatible": 0,
-      "holds": 26
+      "total": 50,
+      "compatible": 1,
+      "holds": 5
     }
   }
 }
