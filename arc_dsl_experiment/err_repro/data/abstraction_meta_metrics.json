@@ -1,0 +1,58 @@
+{
+  "DS1": {
+    "dataset": "DS1_mostfreq_k1",
+    "n_pairs": 24,
+    "train_pairs": 12,
+    "test_pairs": 12,
+    "learned_recolor_rule": "most_frequent",
+    "learned_rotation_k": 1,
+    "train_accuracy": 1.0,
+    "test_accuracy": 1.0,
+    "total_candidates": {
+      "G": 704,
+      "A2": 192,
+      "A2+color": 96,
+      "A2+color+rot": 24
+    },
+    "expected_tries": {
+      "G": 15.166666666666666,
+      "A2": 4.5,
+      "A2+color": 2.5,
+      "A2+color+rot": 1.0
+    },
+    "reductions": {
+      "G\u2192A2": 0.7272727272727273,
+      "A2\u2192A2+color": 0.5,
+      "A2+color\u2192A2+color+rot": 0.75,
+      "G\u2192A2+color+rot": 0.9659090909090909
+    }
+  },
+  "DS2": {
+    "dataset": "DS2_leastfreq_k2",
+    "n_pairs": 24,
+    "train_pairs": 12,
+    "test_pairs": 12,
+    "learned_recolor_rule": "least_frequent",
+    "learned_rotation_k": 2,
+    "train_accuracy": 1.0,
+    "test_accuracy": 1.0,
+    "total_candidates": {
+      "G": 816,
+      "A2": 192,
+      "A2+color": 96,
+      "A2+color+rot": 24
+    },
+    "expected_tries": {
+      "G": 17.5,
+      "A2": 4.5,
+      "A2+color": 2.5,
+      "A2+color+rot": 1.0
+    },
+    "reductions": {
+      "G\u2192A2": 0.7647058823529411,
+      "A2\u2192A2+color": 0.5,
+      "A2+color\u2192A2+color+rot": 0.75,
+      "G\u2192A2+color+rot": 0.9705882352941176
+    }
+  }
+}

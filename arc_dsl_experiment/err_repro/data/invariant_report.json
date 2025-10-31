@@ -1,0 +1,58 @@
+{
+  "best": {
+    "recolor_rule": "most_frequent",
+    "k": 0,
+    "matches": 0,
+    "total": 12
+  },
+  "all": [
+    {
+      "rule": "most_frequent",
+      "k": 0,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "most_frequent",
+      "k": 1,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "most_frequent",
+      "k": 2,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "most_frequent",
+      "k": 3,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "least_frequent",
+      "k": 0,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "least_frequent",
+      "k": 1,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "least_frequent",
+      "k": 2,
+      "matches": 0,
+      "total": 12
+    },
+    {
+      "rule": "least_frequent",
+      "k": 3,
+      "matches": 0,
+      "total": 12
+    }
+  ]
+}
